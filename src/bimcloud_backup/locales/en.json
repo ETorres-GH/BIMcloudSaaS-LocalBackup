@@ -260,7 +260,7 @@
   "gui.unsaved_question": "You have unsaved changes.\nSave before closing?",
   "gui.version": "version {version}",
   "help.client_id": "The name the program uses to identify itself when signing in to BIMcloud. Leave it as it is.",
-  "help.destination": "The folder where backups are kept: a drive on this computer, an external drive or a network folder. To run when nobody is signed in, use a \\server\folder path.",
+  "help.destination": "The folder where backups are kept: a drive on this computer, an external drive or a network folder. To run when nobody is signed in, use a \\\\server\\folder path.",
   "help.every": "How often the backup runs on its own. In days, it runs at the time set in “at”; in minutes or hours, it counts from midnight.",
   "help.history": "Each backup goes into a folder of its own. Folders older than this number of days are deleted, but at least the minimum number of backups is always kept.",
   "help.latest": "Each successful backup replaces the previous one. It takes less space, but you cannot go back to an older version.",

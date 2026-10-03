@@ -42,6 +42,13 @@ def test_both_languages_have_the_same_texts_and_fields():
         assert text.strip() and portuguese[key].strip(), key
 
 
+@pytest.mark.parametrize("language", sorted(i18n.LANGUAGES))
+def test_texts_have_no_control_characters(language):
+    # A Windows path like "\folder" written with one backslash in JSON becomes "\f" + "older".
+    for key, text in i18n.texts(language).items():
+        assert not any(ord(c) < 32 and c != "\n" for c in text), key
+
+
 def test_every_text_the_code_asks_for_exists():
     english = i18n.texts("en")
     missing = []
