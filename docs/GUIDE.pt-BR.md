@@ -310,8 +310,8 @@ O programa roda no Windows Server 2016, 2019, 2022 e 2025.
 **Destino na rede:** use o caminho `\\servidor\backups`, não uma letra mapeada (`Z:`), que não
 existe sem ninguém conectado. A conta precisa poder gravar no compartilhamento.
 
-**Login:** se o navegador do servidor não abrir a página do BIMcloud, use **Copiar o endereço do
-login** (seção 3) e entre em qualquer navegador.
+**Login:** se o navegador do servidor não abrir a página do BIMcloud, use **O navegador não abriu? Copiar
+o endereço do login** (seção 3) e entre em qualquer navegador.
 
 **Avisos:** sem ninguém conectado, o aviso do Windows não aparece; o resultado fica no quadro
 **ÚLTIMO BACKUP** e no log.

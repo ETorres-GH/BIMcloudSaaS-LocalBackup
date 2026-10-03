@@ -96,7 +96,7 @@ In step **1. Connection to BIMcloud**:
 
 1. In **Address**, type the address you use in the browser to open BIMcloud Manager, starting
    with `https://`.
-2. **Username (optional):** your BIMcloud email, only to have it filled in on the sign-in page.
+2. **Username (optional):** your BIMcloud email, only so it is already filled in on the sign-in page.
 3. Click **Sign in to BIMcloud**. The browser opens the BIMcloud login page.
 4. Sign in as usual, two-step verification included, within 5 minutes.
 5. When it works, **"Signed in as <your user>"** shows up.
@@ -137,8 +137,8 @@ In **Projects as**, choose how each project is kept:
 | **PLN** | the latest `.pln` made by BIMcloud; if there is none, the `.BIMProject` | To open it straight in Archicad |
 | **Both** | the two | The safest option, if there is room |
 
-**Include BIMcloud snapshots (backups) in** `.BIMProject` or `.BIMLibrary` also keeps
-the snapshots BIMcloud has of each item. The file becomes much larger.
+In **Include BIMcloud snapshots (backups) in**, checking **.BIMProject** or **.BIMLibrary**
+also keeps the snapshots BIMcloud has of each item. The file becomes much larger.
 
 ## 6. Where to save, history and limits
 
@@ -312,8 +312,8 @@ The program runs on Windows Server 2016, 2019, 2022 and 2025.
 **Destination on the network:** use the `\\server\backups` path, not a mapped letter (`Z:`),
 which does not exist with nobody signed in. The account must be able to write to the share.
 
-**Sign-in:** if the server's browser does not open the BIMcloud page, use **Copy the sign-in
-address** (section 3) and sign in on any browser.
+**Sign-in:** if the server's browser does not open the BIMcloud page, use **Browser did not open? Copy
+the sign-in address** (section 3) and sign in on any browser.
 
 **Notifications:** with nobody signed in, the Windows notification does not show; the result is
 in the **LAST BACKUP** panel and in the log.
