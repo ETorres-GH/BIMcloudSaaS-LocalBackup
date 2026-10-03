@@ -66,11 +66,15 @@ def test_missing_or_damaged_manifest_means_no_details(tmp_path):
 def test_interrupted_runs_are_listed_as_incomplete(tmp_path):
     (tmp_path / f".incompleto-{backup_folder_name(WHEN)}").mkdir()
     (tmp_path / ".incompleto-sem-data").mkdir()
+    (tmp_path / f".incomplete-{backup_folder_name(WHEN.replace(day=27))}").mkdir()
     (tmp_path / "pasta do usuário").mkdir()
 
     entries = history.read_history(tmp_path)
 
-    assert [(e.status, e.when) for e in entries] == [(history.STATUS_INCOMPLETE, WHEN)]
+    assert [(e.status, e.when) for e in entries] == [
+        (history.STATUS_INCOMPLETE, WHEN),
+        (history.STATUS_INCOMPLETE, WHEN.replace(day=27)),
+    ]
 
 
 def test_missing_destination_is_an_empty_history(tmp_path):

@@ -1,26 +1,28 @@
-name: 💡 Sugerir funcionalidade
-description: Ideia de melhoria ou nova funcionalidade.
+name: 💡 Feature request / Sugerir funcionalidade
+description: An idea to improve the program. / Ideia de melhoria ou nova funcionalidade.
 labels: [enhancement]
 body:
   - type: markdown
     attributes:
       value: |
-        Não cole senhas, tokens nem nomes de projetos ou clientes do escritório; use nomes
-        genéricos nos exemplos. Não anexe arquivos `.pln`, `.BIMProject` ou `.BIMLibrary`.
+        English or Portuguese are both fine. / Pode escrever em inglês ou português.
+
+        Do not paste passwords, tokens or names of the office's projects or clients; use generic
+        names. / Não cole senhas, tokens nem nomes de projetos ou clientes; use nomes genéricos.
   - type: textarea
-    id: problema
+    id: problem
     attributes:
-      label: Qual problema isso resolve?
-      placeholder: "Hoje, quando eu ..., acontece ..."
+      label: What problem does it solve? / Qual problema isso resolve?
+      placeholder: "Today, when I ..., ... happens"
     validations:
       required: true
   - type: textarea
-    id: solucao
+    id: solution
     attributes:
-      label: Solução proposta
+      label: Proposed solution / Solução proposta
     validations:
       required: true
   - type: textarea
-    id: alternativas
+    id: alternatives
     attributes:
-      label: Alternativas consideradas
+      label: Alternatives considered / Alternativas consideradas

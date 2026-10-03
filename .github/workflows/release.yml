@@ -1,9 +1,9 @@
 name: Release
 
-# Ao enviar uma tag vX.Y.Z (opcionalmente -alpha.N, -beta.N ou -rc.N), roda os testes, gera o
-# BIMcloudBackup.exe e o instalador BIMcloudBackup-Setup.exe e cria uma Release em RASCUNHO com
-# os dois arquivos e o SHA-256 de cada um.
-# A publicação da Release é sempre manual.
+# On pushing a vX.Y.Z tag (optionally -alpha.N, -beta.N or -rc.N), runs the tests, builds
+# BIMcloudBackup.exe and the BIMcloudBackup-Setup.exe installer and creates a DRAFT release with
+# the two files and the SHA-256 of each one.
+# Publishing the release is always manual.
 
 on:
   push:
@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   version:
-    name: validar a tag
+    name: validate the tag
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.version.outputs.tag }}
@@ -34,14 +34,14 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Validar a versão da tag
+      - name: Validate the version of the tag
         id: version
         run: python scripts/release_version.py "$GITHUB_REF_NAME" --check
 
-      - name: Conferir se a tag está no main
+      - name: Check that the tag is on main
         run: |
           if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
-            echo "::error::A tag $GITHUB_REF_NAME aponta para um commit que não está no main."
+            echo "::error::The tag $GITHUB_REF_NAME points to a commit that is not on main."
             exit 1
           fi
 
@@ -64,26 +64,26 @@ jobs:
           cache: pip
           cache-dependency-path: requirements-ci.txt
 
-      - name: Atualizar o pip
+      - name: Upgrade pip
         run: python -m pip install --upgrade --require-hashes -r requirements-pip.txt
 
-      - name: Instalar dependências conferidas
+      - name: Install checked dependencies
         run: python -m pip install --require-hashes -r requirements-ci.txt
 
-      - name: Instalar o programa
+      - name: Install the program
         run: python -m pip install --no-deps --no-build-isolation -e .
 
       - name: Lint
         run: ruff check .
 
-      - name: Formatação
+      - name: Formatting
         run: ruff format --check .
 
-      - name: Testes
+      - name: Tests
         run: pytest
 
   build:
-    name: gerar o executável
+    name: build the executable
     needs: [version, test]
     runs-on: windows-latest
     steps:
@@ -97,36 +97,36 @@ jobs:
           cache: pip
           cache-dependency-path: requirements-build.txt
 
-      - name: Montar o changelog e as notas da Release
+      - name: Build the changelog and the release notes
         run: python scripts/build_changelog.py "$env:GITHUB_REF_NAME" --output release-notes.md
 
-      - name: Gravar a versão da tag no pacote
+      - name: Write the version of the tag into the package
         run: python scripts/release_version.py "$env:GITHUB_REF_NAME"
 
-      - name: Instalar o Inno Setup (versão fixa, SHA-256 e assinatura conferidos)
+      - name: Install Inno Setup (pinned version, SHA-256 and signature checked)
         run: .\scripts\install_inno.ps1
 
-      - name: Gerar dist\BIMcloudBackup.exe e dist\BIMcloudBackup-Setup.exe
+      - name: Build dist\BIMcloudBackup.exe and dist\BIMcloudBackup-Setup.exe
         run: .\scripts\build_exe.ps1
 
-      - name: Conferir a versão do pacote
+      - name: Check the version of the package
         env:
           EXPECTED: ${{ needs.version.outputs.version }}
         run: |
           $actual = python -c "import bimcloud_backup; print(bimcloud_backup.__version__)"
-          if ($actual -ne $env:EXPECTED) { throw "Versão $actual, esperava $env:EXPECTED" }
+          if ($actual -ne $env:EXPECTED) { throw "Version $actual, expected $env:EXPECTED" }
 
-      - name: Calcular o SHA-256
+      - name: Compute the SHA-256
         working-directory: dist
         run: |
           foreach ($file in "BIMcloudBackup.exe", "BIMcloudBackup-Setup.exe") {
-            if (-not (Test-Path $file)) { throw "$file não foi gerado" }
+            if (-not (Test-Path $file)) { throw "$file was not built" }
             $hash = (Get-FileHash $file -Algorithm SHA256).Hash.ToLower()
             "$hash  $file`n" | Set-Content "$file.sha256" -Encoding ascii -NoNewline
             Get-Content "$file.sha256"
           }
 
-      - name: Incluir as notas no artefato
+      - name: Include the notes in the artifact
         run: Move-Item release-notes.md dist\release-notes.md
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -142,7 +142,7 @@ jobs:
           retention-days: 7
 
   release:
-    name: criar a Release (rascunho)
+    name: create the release (draft)
     needs: [version, build]
     runs-on: ubuntu-latest
     permissions:
@@ -153,11 +153,11 @@ jobs:
           name: BIMcloudBackup-${{ needs.version.outputs.tag }}
           path: dist
 
-      - name: Conferir o SHA-256
+      - name: Check the SHA-256
         working-directory: dist
         run: sha256sum --check BIMcloudBackup.exe.sha256 BIMcloudBackup-Setup.exe.sha256
 
-      - name: Criar ou atualizar a Release em rascunho
+      - name: Create or update the draft release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -170,7 +170,7 @@ jobs:
           )
           if is_draft=$(gh release view "$TAG" --json isDraft --jq .isDraft 2>/dev/null); then
             if [ "$is_draft" != "true" ]; then
-              echo "::error::A Release $TAG já foi publicada; não vou alterá-la."
+              echo "::error::The release $TAG was already published; it will not be changed."
               exit 1
             fi
             gh release edit "$TAG" --notes-file dist/release-notes.md

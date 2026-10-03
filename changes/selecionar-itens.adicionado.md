@@ -1,1 +1,0 @@
-- Escolha de projetos e bibliotecas específicos, além de pastas inteiras.

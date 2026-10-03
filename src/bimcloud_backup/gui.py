@@ -2501,6 +2501,8 @@ class LanguageDialog:
         self.window = window = tk.Toplevel(root)
         window.title(APP_TITLE)
         window.resizable(False, False)
+        # Wide enough for the whole title.
+        window.minsize(round(340 * _scale(window)), 0)
         with contextlib.suppress(tk.TclError):
             self.icons = [
                 tk.PhotoImage(master=window, file=(ASSETS / f"icon-{size}.png").as_posix())
@@ -2554,6 +2556,11 @@ def ask_language(root: tk.Misc) -> str | None:
     dialog = LanguageDialog(root)
     root.wait_window(dialog.window)
     return dialog.choice
+
+
+def _scale(widget: tk.Misc) -> float:
+    """The Windows scale (1.5 at 150%), as the main window computes it."""
+    return max(1.0, float(widget.tk.call("tk", "scaling")) * 72 / 96)
 
 
 def _center(window: tk.Toplevel) -> None:

@@ -1,2 +1,0 @@
-- O programa fica na área de notificação ao fechar a janela, com Abrir, Fazer backup agora e Sair.
-- Opção para abrir com o Windows, desligada por padrão.

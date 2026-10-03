@@ -1,10 +1,10 @@
-# Configuração local e dados sensíveis
+# Local configuration and sensitive data
 config.toml
 *.log
 logs/
 .env
 
-# Backups e arquivos do Archicad/BIMcloud (nunca versionar projetos reais)
+# Backups and Archicad/BIMcloud files (never version real projects)
 backups/
 *.pln
 *.pla
@@ -29,7 +29,7 @@ dist/
 htmlcov/
 release-notes.md
 
-# Editores e sistema
+# Editors and system
 .vscode/
 .idea/
 Thumbs.db

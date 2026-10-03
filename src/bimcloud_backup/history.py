@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from bimcloud_backup.backup import INCOMPLETE_PREFIX
+from bimcloud_backup.backup import INCOMPLETE_PREFIXES, incomplete_folders
 from bimcloud_backup.retention import BACKUP_DIR_FORMAT, list_backups
 from bimcloud_backup.state import MANIFEST_NAME, BackupManifest, load_manifest
 
@@ -88,14 +88,15 @@ def summarise(folder: Path, created: datetime, manifest: BackupManifest) -> Hist
 
 def _incomplete_folders(backup_dir: Path) -> list[Path]:
     try:
-        return [p for p in backup_dir.glob(f"{INCOMPLETE_PREFIX}*") if p.is_dir()]
+        return incomplete_folders(backup_dir)
     except OSError:
         return []
 
 
 def _incomplete(folder: Path) -> HistoryEntry | None:
+    prefix = next(p for p in INCOMPLETE_PREFIXES if folder.name.startswith(p))
     try:
-        when = datetime.strptime(folder.name[len(INCOMPLETE_PREFIX) :], BACKUP_DIR_FORMAT)
+        when = datetime.strptime(folder.name[len(prefix) :], BACKUP_DIR_FORMAT)
     except ValueError:
         return None
     return HistoryEntry(folder, when, STATUS_INCOMPLETE)

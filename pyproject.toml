@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "bimcloud-localbackup"
 dynamic = ["version"]
-description = "Backup local automático dos projetos e bibliotecas do Graphisoft BIMcloud SaaS."
+description = "Automatic local backup of the projects and libraries of Graphisoft BIMcloud SaaS."
 readme = "README.md"
 license = { file = "LICENSE" }
 authors = [{ name = "Ettore Torres" }]

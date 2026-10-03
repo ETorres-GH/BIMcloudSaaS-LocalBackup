@@ -1,17 +1,17 @@
-﻿# Gera dist\BIMcloudBackup.exe (um único arquivo, sem janela de console) e, se o Inno Setup
-# estiver instalado, também dist\BIMcloudBackup-Setup.exe (scripts\build_installer.ps1).
-# Uso: .\scripts\build_exe.ps1   (com o ambiente virtual ativado)
+﻿# Builds dist\BIMcloudBackup.exe (a single file, with no console window) and, when Inno Setup is
+# installed, also dist\BIMcloudBackup-Setup.exe (scripts\build_installer.ps1).
+# Usage: .\scripts\build_exe.ps1   (with the virtual environment active)
 
 Set-Location (Join-Path $PSScriptRoot "..")
 
 python -m pip install --quiet --upgrade --require-hashes -r requirements-pip.txt
-if ($LASTEXITCODE -ne 0) { throw "Falha ao atualizar o pip" }
+if ($LASTEXITCODE -ne 0) { throw "Could not upgrade pip" }
 
 python -m pip install --quiet --require-hashes -r requirements-build.txt
-if ($LASTEXITCODE -ne 0) { throw "Falha ao instalar as dependências conferidas" }
+if ($LASTEXITCODE -ne 0) { throw "Could not install the checked dependencies" }
 
 python -m pip install --quiet --no-deps --no-build-isolation -e .
-if ($LASTEXITCODE -ne 0) { throw "Falha ao instalar o programa" }
+if ($LASTEXITCODE -ne 0) { throw "Could not install the program" }
 
 python -m PyInstaller `
     --noconfirm `
@@ -26,8 +26,8 @@ python -m PyInstaller `
     --collect-data sv_ttk `
     --collect-data bimcloud_backup `
     src\bimcloud_backup\__main__.py
-if ($LASTEXITCODE -ne 0) { throw "Falha ao gerar o executável" }
+if ($LASTEXITCODE -ne 0) { throw "Could not build the executable" }
 
-Write-Host "Executável gerado em dist\BIMcloudBackup.exe"
+Write-Host "Executable built in dist\BIMcloudBackup.exe"
 
 & (Join-Path $PSScriptRoot "build_installer.ps1")

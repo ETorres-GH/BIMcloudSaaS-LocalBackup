@@ -1,1 +1,0 @@
-- O log mostra o motivo de cada item com falha e diz "1 item falhou" em vez de "1 itens falharam".

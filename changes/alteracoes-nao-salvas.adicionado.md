@@ -1,1 +1,0 @@
-- Aviso de alterações não salvas, com os botões Descartar e Salvar.

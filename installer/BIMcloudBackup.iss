@@ -1,9 +1,10 @@
-﻿; Instalador do BIMcloud Backup Local (Inno Setup 6).
+﻿; Installer of BIMcloud Backup Local (Inno Setup 6), in English or Brazilian Portuguese.
 ;
-; Instala só para o usuário atual, sem pedir administrador, em %LOCALAPPDATA%\Programs.
-; Gerado por scripts\build_exe.ps1 (quando o Inno Setup está instalado) e pela Release:
+; Installs only for the current user, without asking for administrator rights, in
+; %LOCALAPPDATA%\Programs. Built by scripts\build_exe.ps1 (when Inno Setup is installed) and by
+; the release:
 ;   ISCC.exe /DAppVersion=0.2.0 /DAppVersionNumeric=0.2.0 installer\BIMcloudBackup.iss
-; Precisa de dist\BIMcloudBackup.exe já gerado. O resultado é dist\BIMcloudBackup-Setup.exe.
+; Needs dist\BIMcloudBackup.exe already built. The result is dist\BIMcloudBackup-Setup.exe.
 
 #ifndef AppVersion
   #define AppVersion "0.0.0"
@@ -14,13 +15,13 @@
 
 #define AppName "BIMcloud Backup Local"
 #define AppExe "BIMcloudBackup.exe"
-; Mesmo nome de scheduler.TASK_NAME e de paths.APP_DIR_NAME.
+; Same name as scheduler.TASK_NAME and paths.APP_DIR_NAME.
 #define TaskName "BIMcloudSaaS-LocalBackup"
 #define DataDir "BIMcloudSaaS-LocalBackup"
 #define IconFile "..\src\bimcloud_backup\assets\icon.ico"
 
 [Setup]
-; Identificador fixo: não mude, senão as atualizações viram uma segunda instalação.
+; Fixed identifier: do not change it, or updates become a second installation.
 AppId={{3700C2F1-04B8-4938-92F0-91363BC75842}
 AppName={#AppName}
 AppVersion={#AppVersion}
@@ -31,8 +32,8 @@ AppSupportURL=https://github.com/ETorres-GH/BIMcloudSaaS-LocalBackup/issues
 AppUpdatesURL=https://github.com/ETorres-GH/BIMcloudSaaS-LocalBackup/releases
 VersionInfoVersion={#AppVersionNumeric}
 VersionInfoProductVersion={#AppVersionNumeric}
-VersionInfoDescription=Instalador do {#AppName}
-; Por usuário, sem administrador: {autopf} vira %LOCALAPPDATA%\Programs.
+VersionInfoDescription={#AppName} Setup
+; Per user, without administrator: {autopf} becomes %LOCALAPPDATA%\Programs.
 PrivilegesRequired=lowest
 DefaultDirName={autopf}\{#AppName}
 DisableProgramGroupPage=yes
@@ -45,7 +46,7 @@ OutputBaseFilename=BIMcloudBackup-Setup
 #if FileExists(AddBackslash(SourcePath) + IconFile)
 SetupIconFile={#IconFile}
 #else
-  #pragma message "Ícone ainda não disponível (" + IconFile + "); o instalador sai com o ícone padrão."
+  #pragma message "Icon not available yet (" + IconFile + "); the installer gets the default icon."
 #endif
 UninstallDisplayIcon={app}\{#AppExe}
 UninstallDisplayName={#AppName}
@@ -53,15 +54,31 @@ WizardStyle=modern
 Compression=lzma2
 SolidCompression=yes
 CloseApplications=yes
-; O programa fica na área de notificação: pede para fechá-lo antes de instalar ou remover.
-; Mesmo nome de tray.MUTEX_NAME.
+; The program stays in the notification area: asks to close it before installing or removing.
+; Same name as tray.MUTEX_NAME.
 AppMutex=Local\{#TaskName}
+; The first screen asks for the language, English first. The program then opens in the same one.
+ShowLanguageDialog=yes
+LanguageDetectionMethod=none
 
 [Languages]
+Name: "en"; MessagesFile: "compiler:Default.isl"
 Name: "ptbr"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
 
+[CustomMessages]
+en.ProgramLanguage=en
+ptbr.ProgramLanguage=pt-BR
+en.RemoveUserData=Also delete the configuration, the logs and the saved BIMcloud sign-in from this computer?
+ptbr.RemoveUserData=Apagar também a configuração, os logs e o acesso guardado ao BIMcloud deste computador?
+en.BackupsKept=The backup folders are NOT deleted, in any case.
+ptbr.BackupsKept=As pastas de backup NÃO são apagadas, em nenhum caso.
+en.LogoutFailed=Could not delete the saved BIMcloud sign-in. The configuration and the logs were kept.
+ptbr.LogoutFailed=Não foi possível apagar o acesso guardado ao BIMcloud. A configuração e os logs foram mantidos.
+en.LogoutRetry=To try again, install and uninstall the program once more, or delete the "%1" credential in the Windows Credential Manager.
+ptbr.LogoutRetry=Para tentar de novo, instale e desinstale o programa outra vez, ou apague a credencial "%1" no Gerenciador de Credenciais do Windows.
+
 [Tasks]
-Name: "desktopicon"; Description: "Criar um atalho na área de trabalho"; GroupDescription: "Atalhos:"; Flags: unchecked
+Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
 Source: "..\dist\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
@@ -73,19 +90,37 @@ Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#AppExe}"; Description: "Abrir o {#AppName}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
 
 [Registry]
-; Só remove, na desinstalação, a abertura com o Windows que o programa cria (tray.RUN_VALUE).
+; On uninstall, only removes the start with Windows that the program creates (tray.RUN_VALUE).
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: none; ValueName: "{#TaskName}"; Flags: uninsdeletevalue dontcreatekey
 
 [UninstallRun]
-; Remove o backup automático; sem a tarefa, o schtasks só avisa e a desinstalação segue.
+; Removes the automatic backup; without the task, schtasks only warns and the uninstall goes on.
 Filename: "{sys}\schtasks.exe"; Parameters: "/Delete /F /TN ""{#TaskName}"""; Flags: runhidden; RunOnceId: "RemoverTarefaAgendada"
 
 [Code]
 var
   RemoveUserData: Boolean;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  Config: String;
+begin
+  // A new installation opens in the language chosen here, without asking again. An existing
+  // configuration is never touched.
+  if CurStep = ssPostInstall then
+  begin
+    Config := ExpandConstant('{userappdata}\{#DataDir}\config.toml');
+    if not FileExists(Config) then
+    begin
+      ForceDirectories(ExtractFileDir(Config));
+      SaveStringToFile(Config, '[interface]' + #13#10 + 'language = "' +
+        CustomMessage('ProgramLanguage') + '"' + #13#10, False);
+    end;
+  end;
+end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
@@ -93,29 +128,27 @@ var
 begin
   if CurUninstallStep = usUninstall then
   begin
-    // Os backups nunca são apagados. Configuração, logs e o acesso guardado só com um "Sim";
-    // numa desinstalação silenciosa a resposta é "Não".
+    // The backups are never deleted. Configuration, logs and the saved sign-in only with a "Yes";
+    // in a silent uninstall the answer is "No".
     RemoveUserData := SuppressibleMsgBox(
-      'Apagar também a configuração, os logs e o acesso guardado ao BIMcloud deste computador?' + #13#10#13#10 +
-      'As pastas de backup NÃO são apagadas, em nenhum caso.',
+      CustomMessage('RemoveUserData') + #13#10#13#10 + CustomMessage('BackupsKept'),
       mbConfirmation, MB_YESNO or MB_DEFBUTTON2, IDNO) = IDYES;
-    // Ainda com o programa instalado: apaga o acesso do Gerenciador de Credenciais. Se falhar,
-    // a configuração fica: é ela que diz de qual servidor é o acesso, para tentar de novo.
+    // With the program still installed: deletes the sign-in from the Credential Manager. If it
+    // fails, the configuration stays: it says which server the sign-in is for, to try again.
     if RemoveUserData then
       if not Exec(ExpandConstant('{app}\{#AppExe}'), 'logout', '', SW_HIDE, ewWaitUntilTerminated, ResultCode)
          or (ResultCode <> 0) then
       begin
         RemoveUserData := False;
         SuppressibleMsgBox(
-          'Não foi possível apagar o acesso guardado ao BIMcloud. A configuração e os logs foram mantidos.' + #13#10#13#10 +
-          'Para tentar de novo, instale e desinstale o programa outra vez, ou apague a credencial ' +
-          '"{#DataDir}" no Gerenciador de Credenciais do Windows.',
+          CustomMessage('LogoutFailed') + #13#10#13#10 +
+          FmtMessage(CustomMessage('LogoutRetry'), ['{#DataDir}']),
           mbError, MB_OK, IDOK);
       end;
   end;
   if (CurUninstallStep = usPostUninstall) and RemoveUserData then
   begin
-    // Só os arquivos do programa, pelo nome: nada que o usuário tenha posto nessas pastas.
+    // Only the program's own files, by name: nothing the user may have put in these folders.
     DeleteFile(ExpandConstant('{userappdata}\{#DataDir}\config.toml'));
     DeleteFile(ExpandConstant('{userappdata}\{#DataDir}\last_run.json'));
     DelTree(ExpandConstant('{localappdata}\{#DataDir}\logs'), True, True, True);

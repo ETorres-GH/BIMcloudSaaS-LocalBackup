@@ -1,121 +1,118 @@
 # BIMcloud Backup Local
 
+English | [Português (Brasil)](README.pt-BR.md)
+
 [![CI](../../actions/workflows/ci.yml/badge.svg)](../../actions/workflows/ci.yml)
 
-Programa gratuito para Windows que guarda no seu computador, todo dia, uma cópia do que está no
-**Graphisoft BIMcloud SaaS**: projetos Teamwork do Archicad, bibliotecas e demais arquivos.
+Free Windows program that keeps a copy of your **Graphisoft BIMcloud SaaS** on your own
+computer, automatically: Archicad Teamwork projects, libraries and every other file.
 
-*English: [summary at the end of this page](#english).*
-
-![Janela do BIMcloud Backup Local](docs/images/interface.png)
+![BIMcloud Backup Local window](docs/images/window.en.png)
 
 > [!WARNING]
-> Versão em desenvolvimento. O backup de arquivos e a exportação de projetos já foram testados
-> num BIMcloud SaaS real; a exportação de bibliotecas ainda não.
+> Version in development. File backups and project exports have been tested on a real
+> BIMcloud SaaS; library exports have not yet.
 
-## Funcionalidades
+## Features
 
-- Exporta os projetos (`.BIMProject`, o último `.pln` do BIMcloud, ou os dois) e as bibliotecas
-  (`.BIMLibrary`), e copia os demais arquivos.
-- Pode incluir os snapshots do BIMcloud nos arquivos exportados.
-- Copia o BIMcloud inteiro ou só as pastas, projetos e bibliotecas que você marcar.
-- Backup automático a cada tantos minutos, horas ou dias, inclusive num servidor sem ninguém
-  conectado.
-- Uma pasta com data e hora por backup; arquivos que não mudaram não são baixados de novo.
-- Apaga os backups mais antigos que o prazo escolhido, sempre mantendo um mínimo.
-- Para sozinho se passar do tempo máximo ou se o disco ficar sem espaço; pode ser cancelado a
-  qualquer momento.
-- Avisa pelo Windows quando um backup automático falha.
-- Login na própria página do BIMcloud, com verificação em duas etapas. O programa nunca vê a sua
-  senha.
-
-## Requisitos
-
-- Windows 10, Windows 11 ou Windows Server 2016 a 2025.
-- Uma conta no BIMcloud SaaS do escritório.
-
-## Instalação
-
-Baixe os arquivos em [Releases](../../releases) (veja [Download](#download)).
-
-- **Instalador:** abra o `BIMcloudBackup-Setup.exe`. Não pede permissão de administrador.
-- **Sem instalar:** guarde o `BIMcloudBackup.exe` numa pasta fixa e abra por ali.
-
-O programa não tem assinatura digital: se o Windows mostrar "O Windows protegeu o computador",
-clique em **Mais informações** e em **Executar assim mesmo**.
-
-## Configuração
-
-Siga os passos numerados da janela e clique em **Salvar alterações**:
-
-1. **Conexão com o BIMcloud:** informe o endereço do BIMcloud e clique em **Entrar no BIMcloud**.
-2. **O que copiar:** projetos, bibliotecas e outros arquivos; **Escolher...** limita a algumas
-   pastas.
-3. **Onde salvar:** a pasta de destino dos backups.
-4. **Histórico:** por quantos dias guardar os backups.
-5. **Backup automático:** ligue a chave e escolha o horário.
-
-## Uso
-
-- Abra o programa pelo Menu Iniciar. **Fazer backup agora** testa na hora.
-- Fechar a janela deixa o programa na área de notificação, perto do relógio. Para fechar de vez,
-  use **Sair** no menu do ícone.
-- O backup automático roda pelo Agendador de Tarefas do Windows, mesmo com o programa fechado.
-- Não edite nada dentro das pastas de backup: para trabalhar num arquivo, copie-o antes.
-
-## Atualização
-
-Baixe a versão nova e rode o instalador por cima. A configuração, o login e o backup automático
-continuam valendo.
+- Exports projects (`.BIMProject`, the latest `.pln` made by BIMcloud, or both) and libraries
+  (`.BIMLibrary`), and copies every other file.
+- Can include BIMcloud's snapshots in the exported files.
+- Copies the whole BIMcloud or only the folders, projects and libraries you choose.
+- Automatic backup every so many minutes, hours or days, even on a server with nobody signed in.
+- One folder with date and time per backup; files that did not change are not downloaded again.
+- Deletes backups older than the period you choose, always keeping a minimum.
+- Stops by itself past a time limit or when the disk runs low on space; can be cancelled at any
+  time.
+- Shows a Windows notification when an automatic backup fails.
+- Sign-in on BIMcloud's own page, with two-step verification. The program never sees your
+  password.
+- Interface in English or Brazilian Portuguese.
 
 ## Download
 
-Baixe a versão mais recente em [Releases](../../releases), o único lugar oficial de download.
-Cada arquivo vem com um `.sha256` para conferir: `Get-FileHash .\BIMcloudBackup-Setup.exe` tem de
-dar o mesmo código.
+Download the latest version from [Releases](../../releases), the only official download place:
 
-## Problemas comuns
+- `BIMcloudBackup-Setup.exe`: the installer (recommended);
+- `BIMcloudBackup.exe`: the program alone, with no installation.
 
-- **"Acesso expirado: entre novamente":** clique em **Entrar novamente**.
-- **O Windows bloqueia o programa sem oferecer "Executar assim mesmo":** é o Controle Inteligente
-  de Aplicativos do Windows 11; veja o [guia](docs/GUIA.md#2-o-aviso-do-windows-ao-abrir).
-- **O backup automático não rodou:** confira se o computador estava ligado e com você conectado,
-  ou use a opção para servidores.
-- **"Espaço livre abaixo de X GB":** libere espaço, troque o destino ou guarde menos dias.
-- **Janelas "Salvar como" no navegador durante o backup:** feche o BIMcloud Manager no navegador.
+Each file comes with a `.sha256` to check it: `Get-FileHash .\BIMcloudBackup-Setup.exe` in
+PowerShell must give the same code.
 
-Mais casos e o passo a passo completo estão no [Guia do usuário](docs/GUIA.md).
+## Installation
 
-## Reportar um problema
+- **Installer:** open `BIMcloudBackup-Setup.exe`. It does not ask for administrator rights.
+- **No installation:** keep `BIMcloudBackup.exe` in a fixed folder and open it from there.
 
-Abra uma [issue](../../issues). Antes de anexar logs, troque os nomes de projetos, pastas e
-clientes por genéricos, e nunca anexe arquivos `.pln`, `.BIMProject` ou `.BIMLibrary`.
-Vulnerabilidades vão pelo reporte privado descrito no [SECURITY.md](SECURITY.md).
+The program is not code-signed. If Windows shows "Windows protected your PC", click
+**More info** and **Run anyway**.
 
-## Licença
+The first time it opens, the program asks for the language: English or Português (Brasil). You
+can change it later in the top right corner of the window.
 
-[PolyForm Shield 1.0.0](LICENSE): uso gratuito, inclusive em escritórios e empresas. Não é
-permitido vender o programa nem criar um produto concorrente com ele.
+![Language choice](docs/images/language.png)
 
-## Aviso
+## Requirements
 
-Este projeto é independente e não é afiliado, endossado ou patrocinado pela Graphisoft SE nem
-pelo Grupo Nemetschek. *Graphisoft*, *Archicad* e *BIMcloud* são marcas dos seus titulares. O
-programa é fornecido como está, sem garantias; não use como sua única cópia de segurança.
+- Windows 10, Windows 11 or Windows Server 2016 to 2025.
+- An account on your office's BIMcloud SaaS.
 
-## English
+## Configuration
 
-**BIMcloud Backup Local** is a free Windows program (Windows 10, 11 and Server 2016 to 2025) that
-makes scheduled local backups of **Graphisoft BIMcloud SaaS**: Archicad Teamwork projects,
-libraries and other files. The interface is in Portuguese.
+Follow the numbered steps of the window and click **Save changes**:
 
-Download the installer from [Releases](../../releases), sign in with your BIMcloud address, choose
-what to copy and where, and turn on the automatic backup. The program is not code-signed; if
-Windows shows "Windows protected your PC", click **More info** and **Run anyway**.
+1. **Connection to BIMcloud:** type the BIMcloud address and click **Sign in to BIMcloud**.
+2. **What to copy:** projects, libraries and other files; **Choose...** limits it to some
+   folders.
+3. **Where to save:** the destination folder of the backups.
+4. **History:** for how many days to keep the backups.
+5. **Automatic backup:** turn on the switch and choose when.
 
-License: [PolyForm Shield 1.0.0](LICENSE). Free to use, including by companies; you may not sell
-it or build a competing product with it. Not affiliated with Graphisoft SE or the Nemetschek
-Group. Provided as is, without warranty.
+## How to Use
+
+- Open the program from the Start menu. **Back up now** tests it right away.
+- Closing the window keeps the program in the notification area, near the clock. To close it
+  for good, use **Exit** in the icon's menu.
+- The automatic backup runs through the Windows Task Scheduler, even with the program closed.
+- Do not edit anything inside the backup folders: to work on a file, copy it first.
+
+The [User guide](docs/GUIDE.md) has the step by step, how to restore and how to use it on a
+server.
+
+## Updating
+
+Download the new version and run the installer over the old one. The configuration, the
+sign-in and the automatic backup keep working.
+
+## Troubleshooting
+
+- **"Access expired: sign in again":** click **Sign in again**.
+- **Windows blocks the program without offering "Run anyway":** that is Windows 11 Smart App
+  Control; see the [guide](docs/GUIDE.md#2-the-windows-warning-when-opening).
+- **The automatic backup did not run:** check that the computer was on and you were signed in,
+  or use the option for servers.
+- **"Free space below X GB":** free some space, change the destination or keep fewer days.
+- **"Save As" windows in the browser during the backup:** close BIMcloud Manager in the browser.
+
+More cases are in the [User guide](docs/GUIDE.md).
+
+## Report a Bug
+
+Open an [issue](../../issues), in English or Portuguese. Before attaching logs, replace the
+names of projects, folders and clients with generic ones, and never attach `.pln`,
+`.BIMProject` or `.BIMLibrary` files. Vulnerabilities go through the private report described
+in [SECURITY.md](SECURITY.md).
+
+## License
+
+[PolyForm Shield 1.0.0](LICENSE): free to use, including in offices and companies. You may not
+sell the program or build a competing product with it.
+
+## Disclaimer
+
+This project is independent and is not affiliated with, endorsed or sponsored by Graphisoft SE
+or the Nemetschek Group. *Graphisoft*, *Archicad* and *BIMcloud* are trademarks of their
+owners. The program is provided as is, without warranty; do not use it as your only backup.
 
 ---
 

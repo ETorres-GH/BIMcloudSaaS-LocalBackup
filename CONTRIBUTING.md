@@ -1,19 +1,22 @@
-# Como contribuir
+# Contributing
 
-- Antes de mandar código, abra uma [issue](../../issues) e descreva o que pretende fazer.
-- Nunca inclua credenciais, endereços internos ou arquivos de projeto (`.pln`, `.BIMProject`,
-  `.BIMLibrary`) em issues, commits ou pull requests.
-- Antes do pull request, rode `ruff check .`, `ruff format --check .` e `pytest`.
-- Assine cada commit com `git commit -s`
+- Before sending code, open an [issue](../../issues) and describe what you plan to do. English or
+  Portuguese are both fine.
+- Never include credentials, internal addresses or project files (`.pln`, `.BIMProject`,
+  `.BIMLibrary`) in issues, commits or pull requests.
+- Code, names and comments are in English. Texts the user sees go in
+  `src/bimcloud_backup/locales/en.json` and `pt-BR.json`, never straight in the code.
+- Before the pull request, run `ruff check .`, `ruff format --check .` and `pytest`.
+- Sign each commit with `git commit -s`
   ([Developer Certificate of Origin](https://developercertificate.org/)).
 
-## Licenciamento das contribuições
+## Licensing of contributions
 
-Este projeto usa a [PolyForm Shield License 1.0.0](LICENSE). Ao enviar uma contribuição, você
-declara que:
+This project uses the [PolyForm Shield License 1.0.0](LICENSE). By sending a contribution, you
+declare that:
 
-1. a contribuição é de sua autoria, ou você tem o direito de enviá-la;
-2. ela é licenciada sob os mesmos termos do projeto; e
-3. você concede ao mantenedor, **Ettore Torres**, uma licença perpétua, mundial, não exclusiva,
-   gratuita e irrevogável para usar, modificar, sublicenciar e distribuir a contribuição, inclusive
-   sob outros termos de licença.
+1. the contribution is your own work, or you have the right to send it;
+2. it is licensed under the same terms as the project; and
+3. you grant the maintainer, **Ettore Torres**, a perpetual, worldwide, non-exclusive, free and
+   irrevocable license to use, modify, sublicense and distribute the contribution, including
+   under other license terms.

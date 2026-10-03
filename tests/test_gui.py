@@ -2144,3 +2144,21 @@ def load_config_language(path):
     from bimcloud_backup.config import saved_language
 
     return saved_language(path)
+
+
+@pytest.mark.parametrize(
+    ("scale", "screen"), [(1.0, (1366, 768)), (1.25, (1920, 1080)), (1.5, (1920, 1080))]
+)
+def test_the_english_window_fits_the_screen_too(app, saved_config, scale, screen):
+    app._change_language("en")
+    normal = float(app.root.tk.call("tk", "scaling"))
+    try:
+        app.root.tk.call("tk", "scaling", normal * scale)
+        app._scale_theme_fonts()
+        app.root.update_idletasks()
+        assert app.root.winfo_reqwidth() <= screen[0] - 16
+        assert app.root.winfo_reqheight() <= screen[1] - app.px(88)
+    finally:
+        app.root.tk.call("tk", "scaling", normal)
+        app._scale_theme_fonts()
+        app._change_language("pt-BR")

@@ -1,52 +1,57 @@
-name: 🐛 Reportar bug
-description: Algo não está funcionando como esperado.
+name: 🐛 Bug report / Reportar bug
+description: Something is not working as expected. / Algo não está funcionando como esperado.
 labels: [bug]
 body:
   - type: markdown
     attributes:
       value: |
-        Não cole senhas, tokens nem endereços internos. Os logs e o `.backup.json` trazem nomes de
-        projetos, pastas e clientes: troque por nomes genéricos (`ProjetoA`, `PastaB`) antes de
-        colar. Não anexe arquivos `.pln`, `.BIMProject` ou `.BIMLibrary`.
+        English or Portuguese are both fine. / Pode escrever em inglês ou português.
+
+        Do not paste passwords, tokens or internal addresses. Logs and `.backup.json` have names
+        of projects, folders and clients: replace them with generic names (`ProjectA`, `FolderB`)
+        before pasting. Do not attach `.pln`, `.BIMProject` or `.BIMLibrary` files.
+
+        Não cole senhas, tokens nem endereços internos. Troque os nomes de projetos, pastas e
+        clientes por genéricos antes de colar. Não anexe arquivos `.pln`, `.BIMProject` ou
+        `.BIMLibrary`.
   - type: textarea
-    id: descricao
+    id: description
     attributes:
-      label: O que aconteceu?
-      description: Descreva o problema e o que você esperava que acontecesse.
+      label: What happened? / O que aconteceu?
+      description: The problem and what you expected. / O problema e o que você esperava.
     validations:
       required: true
   - type: textarea
-    id: passos
+    id: steps
     attributes:
-      label: Passos para reproduzir
+      label: Steps to reproduce / Passos para reproduzir
       placeholder: |
-        1. Configurei ...
-        2. Rodei `bimcloud-backup ...`
-        3. Apareceu o erro ...
+        1. I set ...
+        2. I clicked ...
+        3. The error ... showed up
     validations:
       required: true
   - type: textarea
     id: logs
     attributes:
-      label: Logs / mensagem de erro
+      label: Logs / error message (mensagem de erro)
       description: >-
-        Os logs ficam em %LOCALAPPDATA%\BIMcloudSaaS-LocalBackup\logs. Troque os nomes de
-        projetos, pastas e clientes por nomes genéricos antes de colar.
+        The logs are in / Os logs ficam em %LOCALAPPDATA%\BIMcloudSaaS-LocalBackup\logs.
       render: text
   - type: input
-    id: versao
+    id: version
     attributes:
-      label: Versão do BIMcloudSaaS-LocalBackup
+      label: Program version / Versão do programa
       placeholder: "0.1.0"
     validations:
       required: true
   - type: input
     id: windows
     attributes:
-      label: Versão do Windows
+      label: Windows version / Versão do Windows
       placeholder: "Windows 11 23H2"
   - type: input
     id: archicad
     attributes:
-      label: Versão do Archicad / BIMcloud
+      label: Archicad / BIMcloud version (versão)
       placeholder: "Archicad 28"

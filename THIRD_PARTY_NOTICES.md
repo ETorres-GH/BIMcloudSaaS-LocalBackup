@@ -1,14 +1,14 @@
-# Avisos de terceiros
+# Third-party notices
 
-Este projeto usa componentes de terceiros sob as licenças abaixo.
+This project uses third-party components under the licenses below.
 
 ## Sun Valley ttk theme (sv-ttk)
 
-Usado na interface gráfica. O arquivo `src/bimcloud_backup/assets/spritesheet_light.png` é uma
-versão recolorida (branco e verde-azulado) da folha de sprites original.
+Used in the graphical interface. The file `src/bimcloud_backup/assets/spritesheet_light.png` is
+a recolored version (white and teal) of the original sprite sheet.
 
-- Projeto: <https://github.com/rdbende/Sun-Valley-ttk-theme>
-- Licença: MIT
+- Project: <https://github.com/rdbende/Sun-Valley-ttk-theme>
+- License: MIT
 
 ```text
 MIT License

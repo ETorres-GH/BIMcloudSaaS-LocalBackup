@@ -1,6 +1,6 @@
 """One backup run: walk BIMcloud, download everything into a dated folder, prune old ones.
 
-Files go to `.incompleto-<data>` first; the folder gets its final name only when the run ends.
+Files go to `.incomplete-<date>` first; the folder gets its final name only when the run ends.
 """
 
 from __future__ import annotations
@@ -70,7 +70,9 @@ from bimcloud_backup.state import (
 BLOB_TYPE = "blob"
 PROJECT_TYPES = {"project"}
 LIBRARY_TYPES = {"library"}
-INCOMPLETE_PREFIX = ".incompleto-"
+INCOMPLETE_PREFIX = ".incomplete-"
+# The same folder as earlier versions named it; still recognized and cleaned up.
+INCOMPLETE_PREFIXES = (INCOMPLETE_PREFIX, ".incompleto-")
 LOCK_NAME = ".backup.lock"
 GB = 1024**3
 
@@ -1088,12 +1090,21 @@ def _lock_file(f: IO[str]) -> None:
         fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
 
 
+def incomplete_folders(root_dir: Path) -> list[Path]:
+    """Folders left by runs that did not finish, by this version or earlier ones."""
+    return [
+        entry
+        for prefix in INCOMPLETE_PREFIXES
+        for entry in root_dir.glob(f"{prefix}*")
+        if entry.is_dir()
+    ]
+
+
 def _remove_leftovers(root_dir: Path) -> None:
     """Delete incomplete folders left behind by a run that was killed."""
-    for entry in root_dir.glob(f"{INCOMPLETE_PREFIX}*"):
-        if entry.is_dir():
-            log.info(t("backup.removing_incomplete", name=entry.name))
-            shutil.rmtree(entry, ignore_errors=True)
+    for entry in incomplete_folders(root_dir):
+        log.info(t("backup.removing_incomplete", name=entry.name))
+        shutil.rmtree(entry, ignore_errors=True)
 
 
 def _apply_retention(config: Config, now: datetime) -> list[Path]:

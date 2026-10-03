@@ -1,1 +1,0 @@
-- Ajustes em passos numerados, na ordem de preencher, sem áreas em branco na janela.

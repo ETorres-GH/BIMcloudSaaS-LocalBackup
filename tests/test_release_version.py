@@ -77,7 +77,7 @@ def test_main_check_writes_github_output(tmp_path, monkeypatch, capsys):
 def test_main_rejects_invalid_tag(monkeypatch, capsys):
     monkeypatch.delenv("GITHUB_OUTPUT", raising=False)
     assert release_version.main(["versao-1", "--check"]) == 1
-    assert "Tag inválida" in capsys.readouterr().err
+    assert "Invalid tag" in capsys.readouterr().err
 
 
 def test_version_has_single_source():

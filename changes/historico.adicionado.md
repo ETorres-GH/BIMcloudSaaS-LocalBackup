@@ -1,1 +1,0 @@
-- Lista dos backups guardados, com data, tamanho, situação e o botão **Abrir pasta**.
