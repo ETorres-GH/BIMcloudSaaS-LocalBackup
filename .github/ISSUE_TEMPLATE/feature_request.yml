@@ -1,0 +1,26 @@
+name: 💡 Sugerir funcionalidade
+description: Ideia de melhoria ou nova funcionalidade.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Não cole senhas, tokens nem nomes de projetos ou clientes do escritório; use nomes
+        genéricos nos exemplos. Não anexe arquivos `.pln`, `.BIMProject` ou `.BIMLibrary`.
+  - type: textarea
+    id: problema
+    attributes:
+      label: Qual problema isso resolve?
+      placeholder: "Hoje, quando eu ..., acontece ..."
+    validations:
+      required: true
+  - type: textarea
+    id: solucao
+    attributes:
+      label: Solução proposta
+    validations:
+      required: true
+  - type: textarea
+    id: alternativas
+    attributes:
+      label: Alternativas consideradas

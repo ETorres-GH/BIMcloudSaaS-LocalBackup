@@ -1,0 +1,47 @@
+{
+  "pln": {
+    "backupType": "pln",
+    "enabled": true,
+    "targetResourceId": "projectRoot",
+    "maxBackupCount": 10,
+    "repeatInterval": 86400,
+    "repeatCount": 0,
+    "startTime": 1760025600,
+    "endTime": 0,
+    "type": "resourceBackupSchedule",
+    "revision": 1760013467723.736,
+    "id": "plnprojectRoot",
+    "$hidden": false,
+    "$visibility": "full"
+  },
+  "bimproject": {
+    "backupType": "bimproject",
+    "enabled": true,
+    "targetResourceId": "projectRoot",
+    "maxBackupCount": 5,
+    "repeatInterval": 14400,
+    "repeatCount": 0,
+    "startTime": 0,
+    "endTime": 0,
+    "type": "resourceBackupSchedule",
+    "revision": 1760013467723.58,
+    "id": "bimprojectprojectRoot",
+    "$hidden": false,
+    "$visibility": "full"
+  },
+  "bimlibrary": {
+    "backupType": "bimlibrary",
+    "enabled": true,
+    "targetResourceId": "projectRoot",
+    "maxBackupCount": 5,
+    "repeatInterval": 14400,
+    "repeatCount": 0,
+    "startTime": 0,
+    "endTime": 0,
+    "type": "resourceBackupSchedule",
+    "revision": 1760013467723.765,
+    "id": "bimprojectlibraryRoot",
+    "$hidden": false,
+    "$visibility": "full"
+  }
+}

@@ -1,0 +1,3 @@
+#!/bin/sh
+
+exec python scripts/check_pr.py --commit-message-file "$1"

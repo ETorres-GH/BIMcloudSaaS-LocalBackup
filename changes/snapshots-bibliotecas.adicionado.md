@@ -1,0 +1,1 @@
+- Snapshots do BIMcloud também nas exportações de bibliotecas.

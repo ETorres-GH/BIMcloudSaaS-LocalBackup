@@ -1,0 +1,61 @@
+[
+  {
+    "parentId": null,
+    "authorId": "<REMOVIDO-NA-CAPTURA>",
+    "isService": false,
+    "startedOn": 1790554539735,
+    "progressedOn": 1790554540836,
+    "status": "failed",
+    "jobType": "createLibraryBackup",
+    "properties": [
+      {
+        "name": "libraryId",
+        "value": "13131313-1313-1313-1313-131313131313"
+      },
+      {
+        "name": "backupType",
+        "value": "bimlibrary"
+      },
+      {
+        "name": "libraryname",
+        "value": "BibliotecaExemplo.pla"
+      },
+      {
+        "name": "resourcebackupname",
+        "value": "BackupManualExemplo"
+      },
+      {
+        "name": "userId",
+        "value": "33333333-3333-3333-3333-333333333333"
+      }
+    ],
+    "progress": {
+      "min": 0,
+      "current": 1,
+      "max": 3,
+      "phase": ""
+    },
+    "result": "ModelServerSideError: Model server job failed with code 18, message: Failed to create backup of resource: '13131313-1313-1313-1313-131313131313'..\n    at async (webpack:///modules/portal-server/gs-model-server-handler/modelServerJobs/ModelServerJobHandle.t",
+    "resultCode": "<REMOVIDO-NA-CAPTURA>",
+    "abortable": false,
+    "data": {
+      "userId": "33333333-3333-3333-3333-333333333333",
+      "modelServerJobId": "14141414-1414-1414-1414-141414141414",
+      "modelServerId": "11111111-1111-1111-1111-111111111111",
+      "resourceId": "13131313-1313-1313-1313-131313131313",
+      "resourceName": "BibliotecaExemplo.pla",
+      "resourceBackupName": "BackupManualExemplo"
+    },
+    "retries": 0,
+    "abortRetries": 0,
+    "childJobs": [],
+    "processedChildJobs": [],
+    "childrenAborted": false,
+    "progressInterval": 0,
+    "type": "job",
+    "revision": 1790554540862.081,
+    "id": "15151515-1515-1515-1515-151515151515",
+    "$hidden": false,
+    "$visibility": "full"
+  }
+]

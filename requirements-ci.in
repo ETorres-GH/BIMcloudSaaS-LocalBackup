@@ -1,0 +1,12 @@
+editables==0.6
+hatchling==1.32.4
+keyring==25.7.0
+pip==26.2.1
+pip-audit==2.10.1
+pytest==9.1.1
+requests==2.34.2
+responses==0.26.3
+ruff==0.16.9
+sv-ttk==2.6.1
+tomli-w==1.2.0
+typing-extensions==4.16.0

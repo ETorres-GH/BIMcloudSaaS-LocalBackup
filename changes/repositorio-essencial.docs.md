@@ -1,0 +1,1 @@
+- README e guia do usuário mais curtos, só com o que é preciso para instalar e usar.

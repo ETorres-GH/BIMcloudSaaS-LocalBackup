@@ -1,0 +1,30 @@
+[
+  {
+    "$backupFileName": "ProjetoExemplo - 2026.07.01 16-00.pln",
+    "$serverId": "DDDDDDDD-DDDD-DDDD-DDDD-DDDDDDDDDDDD",
+    "$name": "ProjetoExemplo - 2026.07.01 16-00",
+    "$fileSize": 12824240,
+    "$time": 1790552739000,
+    "$resourceId": "44444444-4444-4444-4444-444444444444",
+    "$resourceName": "ProjetoExemplo",
+    "$resourcePath": "Project Root/PastaExemplo/ProjetoExemplo",
+    "$resourceType": "project",
+    "$formatId": "_server.backup.format.pln-automatic",
+    "$statusId": "_server.backup.status.done",
+    "id": "11111111-1111-1111-1111-11111111111144444444-4444-4444-4444-444444444444_server.backup.format.pln-automaticDDDDDDDD-DDDD-DDDD-DDDD-DDDDDDDDDDDD"
+  },
+  {
+    "$backupFileName": "2026.06.30 23-31 Automatic Backup.archive",
+    "$serverId": "CCCCCCCC-CCCC-CCCC-CCCC-CCCCCCCCCCCC",
+    "$name": "Automatic backup",
+    "$fileSize": 5435493,
+    "$time": 1782862260000,
+    "$resourceId": "44444444-4444-4444-4444-444444444444",
+    "$resourceName": "ProjetoExemplo",
+    "$resourcePath": "Project Root/PastaExemplo/ProjetoExemplo",
+    "$resourceType": "project",
+    "$formatId": "_server.backup.format.bimproject-automatic",
+    "$statusId": "_server.backup.status.done",
+    "id": "11111111-1111-1111-1111-11111111111144444444-4444-4444-4444-444444444444_server.backup.format.bimproject-automaticCCCCCCCC-CCCC-CCCC-CCCC-CCCCCCCCCCCC"
+  }
+]

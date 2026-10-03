@@ -1,0 +1,1 @@
+- Vários arquivos baixados ao mesmo tempo, com novas tentativas após falhas temporárias.

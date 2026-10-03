@@ -1,0 +1,1 @@
+- Executável gerado só com dependências conferidas.

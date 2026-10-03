@@ -1,0 +1,9 @@
+{
+  "error": "invalid_token",
+  "error_description": "Invalid token: access token is invalid",
+  "inner": {
+    "name": "TokenExpiredError",
+    "message": "jwt expired",
+    "expiredAt": "2026-09-27T23:34:57.000Z"
+  }
+}

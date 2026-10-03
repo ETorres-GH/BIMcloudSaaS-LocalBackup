@@ -1,0 +1,53 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "bimcloud-localbackup"
+dynamic = ["version"]
+description = "Backup local automático dos projetos e bibliotecas do Graphisoft BIMcloud SaaS."
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "Ettore Torres" }]
+requires-python = ">=3.12"
+keywords = ["archicad", "bimcloud", "graphisoft", "backup", "bim"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Environment :: Console",
+    "License :: Other/Proprietary License",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Topic :: System :: Archiving :: Backup",
+]
+dependencies = ["requests>=2.32", "keyring>=25", "tomli-w>=1.0", "sv-ttk>=2.6"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6", "responses>=0.25"]
+build = ["pyinstaller>=6.10"]
+
+[project.scripts]
+bimcloud-backup = "bimcloud_backup.cli:main"
+
+[project.gui-scripts]
+bimcloud-backup-gui = "bimcloud_backup.cli:main"
+
+[tool.hatch.version]
+path = "src/bimcloud_backup/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/bimcloud_backup"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Capture only sys.stdout/sys.stderr. The default fd capture swaps the Windows handles of
+# stdout/stderr between test phases; Tcl keeps the old handles as its standard channels, and
+# when Windows reuses one of those values for a file Tcl opens (e.g. a PNG for PhotoImage),
+# Tcl mistakes it for stdout and fails with an empty TclError.
+addopts = "-ra --capture=sys"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "PTH"]

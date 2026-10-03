@@ -1,0 +1,1 @@
+- Sinal "?" ao lado das opções, com uma dica curta sobre cada uma.

@@ -1,0 +1,1 @@
+- Corrigido o download do .pln em alguns servidores do BIMcloud.

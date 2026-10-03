@@ -1,0 +1,74 @@
+# Exemplo de configuração. A janela do programa cria e edita este arquivo em
+# %APPDATA%\BIMcloudSaaS-LocalBackup\config.toml; só é preciso editar à mão no Server Core.
+
+[bimcloud]
+# Endereço que você abre no navegador para acessar o BIMcloud Manager.
+server_url = "https://seu-escritorio.bimcloud.com"
+
+# Não altere, a não ser que o suporte peça.
+client_id = "bimcloud-localbackup"
+
+# Opcional: preenche o usuário na tela de login.
+username = "usuario@escritorio.com"
+
+# Pastas do BIMcloud a copiar, com o caminho a partir da raiz (ex.: ["Obras/2026"]).
+# Vazio = o BIMcloud inteiro.
+source_folders = []
+
+# Projetos e bibliotecas escolhidos um a um, além das pastas (ex.: ["Obras/ProjetoA"]).
+source_projects = []
+source_libraries = []
+
+# A senha não fica aqui: o login é feito pelo navegador, em "Entrar no BIMcloud".
+
+[backup]
+# Pasta onde os backups são gravados (use / ou \\ no caminho).
+directory = "D:/BIMcloud-Backups"
+
+# O que copiar. "files" são os arquivos que não são projetos nem bibliotecas.
+include_projects = true
+include_libraries = true
+include_files = true
+
+# Formato dos projetos: "bimproject", "pln" (o último .pln do BIMcloud) ou "both".
+projects_format = "bimproject"
+
+# Inclui os snapshots do BIMcloud no .BIMProject e no .BIMLibrary (arquivos bem maiores).
+include_backups_in_export = false
+include_backups_in_library_export = false
+
+# "history": guarda retention_days dias de backups.  "latest": só o último.
+versioning = "history"
+retention_days = 30
+
+# Os N backups mais recentes nunca são apagados.
+min_backups_to_keep = 1
+
+# Para o backup depois deste tempo (0 = sem limite).
+max_duration_hours = 4
+
+# Para o backup se o espaço livre ficar abaixo disto (0 = não verificar).
+min_free_space_gb = 10
+
+# Quantos arquivos baixar ao mesmo tempo (1 a 8).
+parallel_downloads = 3
+
+# Desiste de um projeto ou biblioteca que fica este tempo (minutos) sem avançar no BIMcloud.
+export_stall_minutes = 20
+
+[schedule]
+# A cada `every` unidades: "minutes" (1 a 1439), "hours" (1 a 23) ou "days" (1 a 365).
+# Com "days", o backup roda no horário run_at.
+every = 1
+unit = "days"
+run_at = "23:00"
+
+# Aviso do Windows quando um backup automático falha.
+notify_failures = true
+
+# Roda mesmo sem ninguém conectado no Windows (servidores). Pede a senha do Windows ao agendar.
+run_logged_off = false
+
+[logging]
+# Log detalhado, só para investigar problemas.
+verbose = false

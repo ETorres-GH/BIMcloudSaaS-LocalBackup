@@ -1,0 +1,182 @@
+name: Release
+
+# Ao enviar uma tag vX.Y.Z (opcionalmente -alpha.N, -beta.N ou -rc.N), roda os testes, gera o
+# BIMcloudBackup.exe e o instalador BIMcloudBackup-Setup.exe e cria uma Release em RASCUNHO com
+# os dois arquivos e o SHA-256 de cada um.
+# A publicação da Release é sempre manual.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  version:
+    name: validar a tag
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+
+      - name: Validar a versão da tag
+        id: version
+        run: python scripts/release_version.py "$GITHUB_REF_NAME" --check
+
+      - name: Conferir se a tag está no main
+        run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::A tag $GITHUB_REF_NAME aponta para um commit que não está no main."
+            exit 1
+          fi
+
+  test:
+    name: test (Python ${{ matrix.python-version }})
+    needs: version
+    runs-on: windows-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        python-version: ["3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: requirements-ci.txt
+
+      - name: Atualizar o pip
+        run: python -m pip install --upgrade --require-hashes -r requirements-pip.txt
+
+      - name: Instalar dependências conferidas
+        run: python -m pip install --require-hashes -r requirements-ci.txt
+
+      - name: Instalar o programa
+        run: python -m pip install --no-deps --no-build-isolation -e .
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Formatação
+        run: ruff format --check .
+
+      - name: Testes
+        run: pytest
+
+  build:
+    name: gerar o executável
+    needs: [version, test]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements-build.txt
+
+      - name: Montar o changelog e as notas da Release
+        run: python scripts/build_changelog.py "$env:GITHUB_REF_NAME" --output release-notes.md
+
+      - name: Gravar a versão da tag no pacote
+        run: python scripts/release_version.py "$env:GITHUB_REF_NAME"
+
+      - name: Instalar o Inno Setup (versão fixa, SHA-256 e assinatura conferidos)
+        run: .\scripts\install_inno.ps1
+
+      - name: Gerar dist\BIMcloudBackup.exe e dist\BIMcloudBackup-Setup.exe
+        run: .\scripts\build_exe.ps1
+
+      - name: Conferir a versão do pacote
+        env:
+          EXPECTED: ${{ needs.version.outputs.version }}
+        run: |
+          $actual = python -c "import bimcloud_backup; print(bimcloud_backup.__version__)"
+          if ($actual -ne $env:EXPECTED) { throw "Versão $actual, esperava $env:EXPECTED" }
+
+      - name: Calcular o SHA-256
+        working-directory: dist
+        run: |
+          foreach ($file in "BIMcloudBackup.exe", "BIMcloudBackup-Setup.exe") {
+            if (-not (Test-Path $file)) { throw "$file não foi gerado" }
+            $hash = (Get-FileHash $file -Algorithm SHA256).Hash.ToLower()
+            "$hash  $file`n" | Set-Content "$file.sha256" -Encoding ascii -NoNewline
+            Get-Content "$file.sha256"
+          }
+
+      - name: Incluir as notas no artefato
+        run: Move-Item release-notes.md dist\release-notes.md
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: BIMcloudBackup-${{ needs.version.outputs.tag }}
+          path: |
+            dist/BIMcloudBackup.exe
+            dist/BIMcloudBackup.exe.sha256
+            dist/BIMcloudBackup-Setup.exe
+            dist/BIMcloudBackup-Setup.exe.sha256
+            dist/release-notes.md
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: criar a Release (rascunho)
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: BIMcloudBackup-${{ needs.version.outputs.tag }}
+          path: dist
+
+      - name: Conferir o SHA-256
+        working-directory: dist
+        run: sha256sum --check BIMcloudBackup.exe.sha256 BIMcloudBackup-Setup.exe.sha256
+
+      - name: Criar ou atualizar a Release em rascunho
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.version.outputs.tag }}
+          PRERELEASE: ${{ needs.version.outputs.prerelease }}
+        run: |
+          files=(
+            dist/BIMcloudBackup.exe dist/BIMcloudBackup.exe.sha256
+            dist/BIMcloudBackup-Setup.exe dist/BIMcloudBackup-Setup.exe.sha256
+          )
+          if is_draft=$(gh release view "$TAG" --json isDraft --jq .isDraft 2>/dev/null); then
+            if [ "$is_draft" != "true" ]; then
+              echo "::error::A Release $TAG já foi publicada; não vou alterá-la."
+              exit 1
+            fi
+            gh release edit "$TAG" --notes-file dist/release-notes.md
+            gh release upload "$TAG" "${files[@]}" --clobber
+          else
+            flags=(--draft --verify-tag --title "$TAG" --notes-file dist/release-notes.md)
+            if [ "$PRERELEASE" = "true" ]; then flags+=(--prerelease); fi
+            gh release create "$TAG" "${files[@]}" "${flags[@]}"
+          fi

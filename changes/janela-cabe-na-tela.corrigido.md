@@ -1,0 +1,1 @@
+- A janela cabe na tela sem barra de rolagem; as opções avançadas abrem numa janela própria.

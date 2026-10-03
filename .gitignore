@@ -1,0 +1,37 @@
+# Configuração local e dados sensíveis
+config.toml
+*.log
+logs/
+.env
+
+# Backups e arquivos do Archicad/BIMcloud (nunca versionar projetos reais)
+backups/
+*.pln
+*.pla
+*.bimproject*
+*.bimlibrary
+*.bpn
+*.lcf
+*.tpl
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+*.spec
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+release-notes.md
+
+# Editores e sistema
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+.DS_Store

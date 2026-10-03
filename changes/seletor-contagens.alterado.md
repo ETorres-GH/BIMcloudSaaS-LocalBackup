@@ -1,0 +1,1 @@
+- O seletor mostra quantos projetos e bibliotecas cada pasta tem.

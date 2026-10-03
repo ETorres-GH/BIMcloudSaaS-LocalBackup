@@ -1,0 +1,1 @@
+- O backup automático pode ser a cada tantos minutos, horas ou dias.
