@@ -441,9 +441,11 @@ def test_low_disk_space_aborts_before_starting(tmp_path):
         run_backup(config, FakeClient(), FakeDownloader(), now=NOW, free_space=lambda p: 1)
 
 
-def test_leftover_incomplete_folder_is_removed(tmp_path):
+# ".incompleto-" is how earlier versions named it.
+@pytest.mark.parametrize("prefix", [".incomplete-", ".incompleto-"])
+def test_leftover_incomplete_folder_is_removed(tmp_path, prefix):
     config = make_config(tmp_path)
-    leftover = config.backup_dir / ".incompleto-2026-09-01_230000"
+    leftover = config.backup_dir / f"{prefix}2026-09-01_230000"
     leftover.mkdir(parents=True)
     run_backup(config, FakeClient(), FakeDownloader(), now=NOW)
     assert not leftover.exists()

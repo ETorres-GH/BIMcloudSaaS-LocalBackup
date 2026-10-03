@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from bimcloud_backup.backup import INCOMPLETE_PREFIX
+from bimcloud_backup.backup import INCOMPLETE_PREFIXES, incomplete_folders
 from bimcloud_backup.retention import BACKUP_DIR_FORMAT, list_backups
 from bimcloud_backup.state import MANIFEST_NAME, BackupManifest, load_manifest
 
@@ -16,8 +16,10 @@ STATUS_WARNINGS = "warnings"
 STATUS_NO_DETAILS = "no_details"
 STATUS_INCOMPLETE = "incomplete"
 
-# File kinds in the manifest and how the interface names them.
+# File kinds in the manifest and how the interface names them. Plain files are counted as
+# FILES, which the interface names in the chosen language.
 KIND_LABELS = {"bimproject": ".BIMProject", "pln": ".pln", "bimlibrary": ".BIMLibrary"}
+FILES = "files"
 
 
 @dataclass(frozen=True)
@@ -27,7 +29,7 @@ class HistoryEntry:
     status: str
     size: int | None = None
     files: int | None = None
-    # Exported or downloaded files per kind: ".BIMProject", ".pln", ".BIMLibrary", "arquivos".
+    # Exported or downloaded files per kind: ".BIMProject", ".pln", ".BIMLibrary" or FILES.
     counts: tuple[tuple[str, int], ...] = ()
     errors: int = 0
 
@@ -70,8 +72,8 @@ def _completed(
 
 
 def summarise(folder: Path, created: datetime, manifest: BackupManifest) -> HistoryEntry:
-    kinds = Counter(KIND_LABELS.get(f.kind or "", "arquivos") for f in manifest.files)
-    order = [*KIND_LABELS.values(), "arquivos"]
+    kinds = Counter(KIND_LABELS.get(f.kind or "", FILES) for f in manifest.files)
+    order = [*KIND_LABELS.values(), FILES]
     counts = tuple((label, kinds[label]) for label in order if kinds[label])
     return HistoryEntry(
         folder,
@@ -86,14 +88,15 @@ def summarise(folder: Path, created: datetime, manifest: BackupManifest) -> Hist
 
 def _incomplete_folders(backup_dir: Path) -> list[Path]:
     try:
-        return [p for p in backup_dir.glob(f"{INCOMPLETE_PREFIX}*") if p.is_dir()]
+        return incomplete_folders(backup_dir)
     except OSError:
         return []
 
 
 def _incomplete(folder: Path) -> HistoryEntry | None:
+    prefix = next(p for p in INCOMPLETE_PREFIXES if folder.name.startswith(p))
     try:
-        when = datetime.strptime(folder.name[len(INCOMPLETE_PREFIX) :], BACKUP_DIR_FORMAT)
+        when = datetime.strptime(folder.name[len(prefix) :], BACKUP_DIR_FORMAT)
     except ValueError:
         return None
     return HistoryEntry(folder, when, STATUS_INCOMPLETE)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import queue
@@ -19,7 +20,7 @@ from typing import Any
 import requests
 import sv_ttk
 
-from bimcloud_backup import __version__, history, scheduler, service, tray
+from bimcloud_backup import __version__, history, i18n, scheduler, service, tray
 from bimcloud_backup.auth import TokenStore
 from bimcloud_backup.backup import BackupCancelled, Progress
 from bimcloud_backup.config import (
@@ -28,7 +29,6 @@ from bimcloud_backup.config import (
     PROJECTS_PLN,
     UNIT_DAYS,
     UNIT_MINUTES,
-    UNIT_NAMES,
     UNITS,
     VERSIONING_HISTORY,
     VERSIONING_LATEST,
@@ -42,12 +42,16 @@ from bimcloud_backup.config import (
     normalize_selection,
     parse_config,
     save_config,
+    save_language,
+    saved_language,
     schedule_from,
     selection_from,
+    unit_names,
 )
 from bimcloud_backup.errors import AuthError, BimcloudError
 from bimcloud_backup.failures import Failure, count_failed, first_line, where, why
 from bimcloud_backup.folder_picker import FolderPicker, describe_selection
+from bimcloud_backup.i18n import LANGUAGES, format_count, format_date, format_decimal, plural, t
 from bimcloud_backup.logs import RedactingFormatter, get_logger, setup_logging
 from bimcloud_backup.paths import log_dir
 from bimcloud_backup.redaction import redact
@@ -66,12 +70,8 @@ DESIGN_WIDTH = 1040
 # Height added at start-up, on top of the minimum: room for the advanced options in the window
 # and for longer lists of backups and activity.
 LIST_EXTRA_HEIGHT = 200
-# Space between the advanced options shown in the window and the row with "Salvar alterações".
+# Space between the advanced options shown in the window and the row with "Save changes".
 ADVANCED_GAP = 8
-BROWSER_WARNING = "Durante o backup, feche o BIMcloud Manager no navegador."
-UNSAVED_MESSAGE = (
-    "Você tem alterações não salvas. Clique em Salvar alterações para que elas valham."
-)
 POLL_MS = 100
 # Windows picks the best size for the title bar and taskbar.
 WINDOW_ICON_SIZES = (256, 64, 48, 32, 16)
@@ -98,65 +98,27 @@ ICON = {
     "person": "\ue77b",
     "settings": "\ue713",
     "help": "\ue9ce",
+    "globe": "\ue774",
 }
 
-# Hints of the "?" next to the options whose name does not say everything.
-HELP = {
-    "username": (
-        "O e-mail com que você entra no BIMcloud. Se preencher, a página de login já abre com "
-        "ele; pode ficar em branco."
-    ),
-    "projects_format": (
-        "BIMProject é a exportação completa de cada projeto, feita na hora. PLN é o último "
-        ".pln que o próprio BIMcloud guardou, mais rápido, mas pode não ter as últimas "
-        "mudanças; Ambos guarda os dois."
-    ),
-    "snapshots": (
-        "Snapshots são os backups que o BIMcloud guarda de cada projeto e biblioteca. Marcados, "
-        "eles vão dentro do arquivo exportado, que fica bem maior."
-    ),
-    "destination": (
-        "A pasta onde os backups ficam: um disco do computador, um disco externo ou uma pasta "
-        "de rede. Para rodar sem ninguém conectado, use o caminho \\\\servidor\\pasta."
-    ),
-    "history": (
-        "Cada backup fica numa pasta própria. As pastas mais antigas que esse número de dias "
-        "são apagadas, mas sempre sobram pelo menos o mínimo de backups."
-    ),
-    "latest": (
-        "Cada backup que termina bem substitui o anterior. Ocupa menos espaço, mas não dá para "
-        "voltar a uma versão mais antiga."
-    ),
-    "every": (
-        "De quanto em quanto tempo o backup roda sozinho. Em dias, ele roda no horário de "
-        "“às”; em minutos e horas, conta a partir da meia-noite."
-    ),
-    "logged_off": (
-        "Para servidores, onde ninguém fica conectado no Windows. Ao salvar, o programa pede a "
-        "senha da sua conta do Windows e a entrega ao Agendador de Tarefas; o programa não a "
-        "grava. Se trocar a senha, salve de novo."
-    ),
-    "max_duration": (
-        "Se o backup passar desse tempo, ele para e o que foi copiado nessa vez é descartado; "
-        "os backups anteriores continuam guardados. 0 = sem limite."
-    ),
-    "min_free_space": (
-        "O backup para se o disco de destino ficar com menos espaço livre que isso, para não "
-        "lotar o disco. 0 = não verificar."
-    ),
-    "client_id": ("O nome com que o programa se apresenta ao BIMcloud no login. Deixe como está."),
-    "verbose": (
-        "Grava mais detalhes no log, o que ajuda a descobrir um problema. O arquivo fica maior."
-    ),
-    "notify_failures": (
-        "Mostra um aviso do Windows quando um backup automático falha, termina com erros, é "
-        "cancelado ou precisa de um novo login no BIMcloud."
-    ),
-    "startup": (
-        "Ao entrar no Windows, o programa abre sozinho, só com o ícone perto do relógio, para "
-        "acompanhar os backups."
-    ),
-}
+# Options with a "?" next to them, because their name does not say everything. The hint of
+# each is the text "help.<key>" of the locales.
+HELP = (
+    "username",
+    "projects_format",
+    "snapshots",
+    "destination",
+    "history",
+    "latest",
+    "every",
+    "logged_off",
+    "max_duration",
+    "min_free_space",
+    "client_id",
+    "verbose",
+    "notify_failures",
+    "startup",
+)
 
 ASSETS = Path(__file__).resolve().parent / "assets"
 
@@ -304,13 +266,16 @@ class QueueLogHandler(logging.Handler):
         self._events.put(("log", self.format(record)))
 
 
-HISTORY_COLUMNS = (("when", "Data"), ("size", "Tamanho"), ("status", "Situação"))
-# The widest text each column of the backup list may show.
-HISTORY_LONGEST = {
-    "when": ("00/00 00:00",),
-    "size": ("999,9 GB",),
-    "status": ("Com avisos (99)", "Sem detalhes", "Incompleto", "Concluído"),
-}
+HISTORY_COLUMNS = ("when", "size", "status")
+
+
+def history_longest(column: str) -> tuple[str, ...]:
+    """The widest texts a column of the backup list may show, in the chosen language."""
+    if column == "when":
+        return (format_date(datetime(2000, 12, 28, 23, 59), "format.short_datetime"),)
+    if column == "size":
+        return (f"{format_decimal(999.9)} GB",)
+    return tuple(t(f"history.status.{status}", count=99) for status in HISTORY_STATUSES.values())
 
 
 class FailuresWindow:
@@ -327,7 +292,7 @@ class FailuresWindow:
         heading_font, text_font, small_font = fonts
         self.failures = failures
         self.window = window = tk.Toplevel(parent)
-        window.title(f"Itens com erro · backup {backup_name}")
+        window.title(t("failures_window.title", name=backup_name))
         window.configure(background=colors["bg"])
         window.transient(parent)
         body = ttk.Frame(window, padding=16)
@@ -336,7 +301,7 @@ class FailuresWindow:
         body.rowconfigure(1, weight=1)
         ttk.Label(
             body,
-            text=f"{count_failed(len(failures))} neste backup. O restante foi copiado normalmente.",
+            text=t("failures_window.summary", failed=count_failed(len(failures))),
         ).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 8))
         self.text = text = tk.Text(
             body,
@@ -365,15 +330,16 @@ class FailuresWindow:
         for failure in failures:
             text.insert("end", f"{where(failure)}\n", "where")
             text.insert("end", f"{why(failure)}\n", "why")
-            text.insert("end", f"Mensagem técnica: {first_line(failure.message)}\n", "technical")
+            technical = t("failures_window.technical", text=first_line(failure.message))
+            text.insert("end", f"{technical}\n", "technical")
         text.configure(state="disabled")
         buttons = ttk.Frame(body)
         buttons.grid(row=2, column=0, columnspan=2, sticky="e", pady=(12, 0))
         self.copy_button = ttk.Button(
-            buttons, text="Copiar mensagens técnicas", command=self.copy_technical
+            buttons, text=t("failures_window.copy"), command=self.copy_technical
         )
         self.copy_button.pack(side="left", padx=(0, 8))
-        ttk.Button(buttons, text="Fechar", command=window.destroy).pack(side="left")
+        ttk.Button(buttons, text=t("button.close"), command=window.destroy).pack(side="left")
 
     def technical_text(self) -> str:
         """Every failure as recorded, for support: path and the full original message."""
@@ -382,7 +348,7 @@ class FailuresWindow:
     def copy_technical(self) -> None:
         self.window.clipboard_clear()
         self.window.clipboard_append(self.technical_text())
-        self.copy_button.configure(text="Copiado")
+        self.copy_button.configure(text=t("failures_window.copied"))
 
 
 # Options with no control in the window: saving keeps the value read from config.toml.
@@ -459,7 +425,7 @@ class App:
             )
         except tk.TclError:
             # Cosmetic only: the window still works with the theme's default colors.
-            get_logger().warning("Não foi possível aplicar as cores da interface", exc_info=True)
+            get_logger().warning(t("gui.theme_failed"), exc_info=True)
 
     def _set_window_icon(self) -> None:
         """Program icon on this window and, as the default, on every window opened later.
@@ -475,7 +441,7 @@ class App:
         except tk.TclError:
             # Cosmetic only: without the PNGs the window keeps the default Tk icon.
             self.icons = []
-            get_logger().warning("Não foi possível carregar o ícone da janela", exc_info=True)
+            get_logger().warning(t("gui.icon_failed"), exc_info=True)
 
     def _scale_theme_fonts(self) -> None:
         """Make the theme's pixel fonts follow the Windows scale, like the program's own fonts.
@@ -579,7 +545,7 @@ class App:
         self.advanced_window: tk.Toplevel | None = None
         # The "?" of each option in the main window, by its key in HELP.
         self.help_marks: dict[str, HelpMark] = {}
-        self.auth_text = s(value="Verificando...")
+        self.auth_text = s(value=t("auth.checking"))
         self.save_text = s(value="")
         self.last_title = s()
         self.last_detail = s()
@@ -612,7 +578,7 @@ class App:
                         elif section == "schedule":
                             file_schedule = values
             except ConfigError as e:
-                messagebox.showwarning(APP_TITLE, f"Configuração ignorada:\n{e}")
+                messagebox.showwarning(APP_TITLE, t("gui.config_ignored", error=e))
         self.file_only = {(section, key): raw[section][key] for section, key in FILE_ONLY_OPTIONS}
         bc, bk, sc = raw["bimcloud"], raw["backup"], raw["schedule"]
         every, unit = _file_schedule(file_schedule)
@@ -649,9 +615,9 @@ class App:
 
     def _form_raw(self, directory_fallback: str | None = None) -> dict[str, Any]:
         v = {k: var.get() for k, var in self.v.items()}
-        every = _number(v["schedule_every"], int, "A cada")
+        every = _number(v["schedule_every"], int, t("schedule.every"))
         if v["schedule_unit"] in UNITS:
-            check_interval(every, v["schedule_unit"], "A cada")
+            check_interval(every, v["schedule_unit"], t("schedule.every"))
         raw: dict[str, Any] = {
             "bimcloud": {
                 "server_url": v["server_url"],
@@ -670,12 +636,16 @@ class App:
                 "include_backups_in_export": v["include_backups_in_export"],
                 "include_backups_in_library_export": v["include_backups_in_library_export"],
                 "versioning": v["versioning"],
-                "retention_days": _number(v["retention_days"], int, "Guardar por (dias)"),
+                "retention_days": _number(v["retention_days"], int, t("field.retention_days")),
                 "min_backups_to_keep": _number(
-                    v["min_backups_to_keep"], int, "Manter no mínimo (backups)"
+                    v["min_backups_to_keep"], int, t("field.min_backups_to_keep")
                 ),
-                "max_duration_hours": _number(v["max_duration_hours"], float, "Duração máxima"),
-                "min_free_space_gb": _number(v["min_free_space_gb"], float, "Espaço livre mínimo"),
+                "max_duration_hours": _number(
+                    v["max_duration_hours"], float, t("field.max_duration_hours")
+                ),
+                "min_free_space_gb": _number(
+                    v["min_free_space_gb"], float, t("field.min_free_space_gb")
+                ),
             },
             "schedule": {
                 "every": every,
@@ -685,6 +655,7 @@ class App:
                 "run_logged_off": v["run_logged_off"],
             },
             "logging": {"verbose": v["verbose"]},
+            "interface": {"language": i18n.language()},
         }
         for (section, key), value in self.file_only.items():
             raw[section][key] = value
@@ -726,18 +697,61 @@ class App:
         )
         tk.Label(
             bar,
-            text="Cópias automáticas do BIMcloud SaaS neste computador",
+            text=t("gui.subtitle"),
             font=self.f_small,
             fg=c["on_brand"],
             bg=c["brand"],
         ).grid(row=1, column=1, sticky="w")
-        self.version_label = tk.Label(
-            bar, text=f"versão {__version__}", font=self.f_small, fg=c["on_brand"], bg=c["brand"]
-        )
-        self.version_label.grid(row=0, column=2, rowspan=2, sticky="e")
+        # The version and the language share a corner; the unsaved changes take it over.
+        self.version_label = corner = tk.Frame(bar, background=c["brand"])
+        corner.grid(row=0, column=2, rowspan=2, sticky="e")
+        tk.Label(
+            corner,
+            text=t("gui.version", version=__version__),
+            font=self.f_small,
+            fg=c["on_brand"],
+            bg=c["brand"],
+        ).pack(anchor="e")
+        self._build_language_button(corner).pack(anchor="e", pady=(2, 0))
         self._build_unsaved_banner(bar).grid(row=0, column=2, rowspan=2, sticky="e")
         self.unsaved_banner.grid_remove()
         return bar
+
+    def _build_language_button(self, parent: tk.Misc) -> tk.Frame:
+        """The current language, which opens a menu to choose another one."""
+        c = self.colors
+        button = tk.Frame(parent, background=c["brand"], cursor="hand2", takefocus=True)
+        tk.Label(
+            button, text=ICON["globe"], font=self.f_icon_help, fg=c["ink"], bg=c["brand"]
+        ).pack(side="left", padx=(0, 4))
+        tk.Label(
+            button,
+            text=f"{LANGUAGES[i18n.language()]} \u25be",
+            font=(*self.f_small, "underline"),
+            fg=c["ink"],
+            bg=c["brand"],
+        ).pack(side="left")
+        self.language_menu = menu = tk.Menu(button, tearoff=False)
+        self.language_choice = tk.StringVar(value=i18n.language())
+        for code, name in LANGUAGES.items():
+            menu.add_radiobutton(
+                label=name,
+                value=code,
+                variable=self.language_choice,
+                command=lambda: self._change_language(self.language_choice.get()),
+            )
+
+        def show(_event: Any = None) -> str:
+            menu.tk_popup(button.winfo_rootx(), button.winfo_rooty() + button.winfo_height())
+            return "break"
+
+        for widget in (button, *button.winfo_children()):
+            widget.bind("<Button-1>", show)
+        button.bind("<Return>", show)
+        button.bind("<space>", show)
+        self.language_button = button
+        Tooltip(button, lambda: t("gui.language_hint"))
+        return button
 
     def _build_unsaved_banner(self, parent: tk.Misc) -> tk.Frame:
         """Shown in the header while the settings have changes not saved yet."""
@@ -748,18 +762,18 @@ class App:
         ).pack(side="left", padx=(0, 10))
         tk.Label(
             banner,
-            text=UNSAVED_MESSAGE,
+            text=t("gui.unsaved_message"),
             font=self.f_text,
             fg=c["ink"],
             bg=c["warn_bg"],
             justify="left",
             wraplength=self.px(280),
         ).pack(side="left", padx=(0, 12))
-        ttk.Button(banner, text="Descartar alterações", command=self._discard).pack(
+        ttk.Button(banner, text=t("gui.discard_changes"), command=self._discard).pack(
             side="left", padx=(0, 8)
         )
         ttk.Button(
-            banner, text="Salvar alterações", style="Accent.TButton", command=self._save
+            banner, text=t("gui.save_changes"), style="Accent.TButton", command=self._save
         ).pack(side="left")
         self.unsaved_banner = banner
         return banner
@@ -785,7 +799,7 @@ class App:
         return card
 
     def _help(self, parent: tk.Misc, key: str, keep: bool = True) -> ttk.Label:
-        mark = HelpMark(parent, HELP[key], self.colors)
+        mark = HelpMark(parent, t(f"help.{key}"), self.colors)
         if keep:
             self.help_marks[key] = mark
         return mark.label
@@ -817,7 +831,10 @@ class App:
         )
         self.last_icon.grid(row=0, column=0, rowspan=3, sticky="n", padx=(0, 14))
         ttk.Label(
-            last, text="ÚLTIMO BACKUP", style="Muted.TLabel", foreground=self.colors["muted"]
+            last,
+            text=t("status.last_backup"),
+            style="Muted.TLabel",
+            foreground=self.colors["muted"],
         ).grid(row=0, column=1, sticky="w")
         ttk.Label(last, textvariable=self.last_title, style="Status.TLabel").grid(
             row=1, column=1, sticky="w"
@@ -832,7 +849,7 @@ class App:
         # Shown only when the last backup had items that failed.
         self.last_failures_link = ttk.Label(
             last,
-            text="Ver os itens com erro",
+            text=t("status.see_failed_items"),
             style="Muted.TLabel",
             foreground=self.colors["accent"],
             cursor="hand2",
@@ -866,17 +883,17 @@ class App:
 
         self.run_button = ttk.Button(
             col,
-            text=f"{ICON['download']}   Fazer backup agora",
+            text=f"{ICON['download']}   {t('status.back_up_now')}",
             style="Big.Accent.TButton",
             command=self._run_backup,
         )
         self.run_button.grid(row=2, column=0, sticky="ew")
         self.run_tooltip = Tooltip(
-            self.run_button, lambda: None if self.busy else self._blocked_hint("fazer o backup")
+            self.run_button, lambda: None if self.busy else self._blocked_hint("backup")
         )
         ttk.Label(
             col,
-            text=BROWSER_WARNING,
+            text=t("status.browser_warning"),
             style="Muted.TLabel",
             foreground=self.colors["muted"],
             wraplength=self.px(320),
@@ -888,7 +905,7 @@ class App:
         self.progress = ttk.Progressbar(self.running, mode="indeterminate")
         self.progress.grid(row=0, column=0, sticky="ew", padx=(0, 8))
         self.cancel_button = ttk.Button(
-            self.running, text="Cancelar backup", command=self._cancel_backup
+            self.running, text=t("status.cancel_backup"), command=self._cancel_backup
         )
         self.cancel_button.grid(row=0, column=1)
         # How far the backup is. It takes the place of the list of saved backups while the
@@ -922,8 +939,8 @@ class App:
         activity.rowconfigure(1, weight=1)
         head = ttk.Frame(activity)
         head.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 4))
-        ttk.Label(head, text="Atividade", style="Heading.TLabel").pack(side="left")
-        ttk.Button(head, text="Abrir logs", command=self._open_logs).pack(side="right")
+        ttk.Label(head, text=t("status.activity"), style="Heading.TLabel").pack(side="left")
+        ttk.Button(head, text=t("status.open_logs"), command=self._open_logs).pack(side="right")
         box = ttk.Frame(activity, style="Card.TFrame", padding=2)
         box.grid(row=1, column=0, columnspan=2, sticky="nsew")
         box.columnconfigure(0, weight=1)
@@ -985,8 +1002,8 @@ class App:
         return entry
 
     def _build_connection(self, parent: ttk.Frame) -> ttk.Frame:
-        card = self._card(parent, "person", "1. Conexão com o BIMcloud")
-        self.login_button = ttk.Button(card.head, text="Entrar no BIMcloud", command=self._login)
+        card = self._card(parent, "person", t("connection.title"))
+        self.login_button = ttk.Button(card.head, text=t("connection.sign_in"), command=self._login)
         self.login_button.pack(side="right")
         ttk.Label(card.head, textvariable=self.auth_text).pack(side="right", padx=(0, 12))
         self.auth_dot = ttk.Label(
@@ -995,17 +1012,17 @@ class App:
         self.auth_dot.pack(side="right", padx=(0, 6))
         card.columnconfigure(1, weight=3)
         card.columnconfigure(3, weight=2)
-        self._field(card, 1, "Endereço", "server_url").configure(width=34)
-        self._with_help(card, lambda f: ttk.Label(f, text="Usuário (opcional)"), "username").grid(
-            row=1, column=2, padx=(16, 8)
-        )
+        self._field(card, 1, t("connection.address"), "server_url").configure(width=34)
+        self._with_help(
+            card, lambda f: ttk.Label(f, text=t("connection.username")), "username"
+        ).grid(row=1, column=2, padx=(16, 8))
         ttk.Entry(card, textvariable=self.v["username"], width=18).grid(
             row=1, column=3, sticky="ew", pady=3
         )
         # Shown while waiting for the login: a server may have no browser that opens BIMcloud.
         self.login_link = ttk.Label(
             card,
-            text="O navegador não abriu? Copiar o endereço do login",
+            text=t("connection.copy_login_url"),
             style="Muted.TLabel",
             foreground=self.colors["accent"],
             cursor="hand2",
@@ -1017,14 +1034,14 @@ class App:
         return card
 
     def _build_content(self, parent: ttk.Frame) -> ttk.Frame:
-        card = self._card(parent, "download", "2. O que copiar")
+        card = self._card(parent, "download", t("content.title"))
         row = ttk.Frame(card)
         row.grid(row=1, column=0, columnspan=3, sticky="ew")
         for column, (icon, text, key) in enumerate(
             (
-                ("project", "Projetos", "include_projects"),
-                ("library", "Bibliotecas (.BIMLibrary)", "include_libraries"),
-                ("file", "Outros arquivos", "include_files"),
+                ("project", t("content.projects"), "include_projects"),
+                ("library", t("content.libraries"), "include_libraries"),
+                ("file", t("content.files"), "include_files"),
             )
         ):
             row.columnconfigure(column, weight=1)
@@ -1043,13 +1060,13 @@ class App:
 
         projects = ttk.Frame(card)
         projects.grid(row=2, column=0, columnspan=3, sticky="w", pady=(8, 0))
-        ttk.Label(projects, text="Projetos em").pack(side="left", padx=(0, 4))
+        ttk.Label(projects, text=t("content.projects_as")).pack(side="left", padx=(0, 4))
         self._help(projects, "projects_format").pack(side="left", padx=(0, 8))
         self.project_format_widgets: list[ttk.Widget] = []
         for value, text in (
             (PROJECTS_BIMPROJECT, "BIMProject"),
             (PROJECTS_PLN, "PLN"),
-            (PROJECTS_BOTH, "Ambos"),
+            (PROJECTS_BOTH, t("content.both")),
         ):
             radio = ttk.Radiobutton(
                 projects,
@@ -1063,9 +1080,7 @@ class App:
         # One row for both: each on its own row made the window too tall for a notebook.
         snapshots = ttk.Frame(card)
         snapshots.grid(row=3, column=0, columnspan=3, sticky="w", pady=(4, 0))
-        ttk.Label(snapshots, text="Incluir os snapshots (backups) do BIMcloud no").pack(
-            side="left", padx=(0, 4)
-        )
+        ttk.Label(snapshots, text=t("content.snapshots")).pack(side="left", padx=(0, 4))
         self._help(snapshots, "snapshots").pack(side="left", padx=(0, 8))
         self.include_backups_check = ttk.Checkbutton(
             snapshots, text=".BIMProject", variable=self.v["include_backups_in_export"]
@@ -1077,7 +1092,7 @@ class App:
         self.include_library_backups_check.pack(side="left")
         ttk.Label(
             card,
-            text="PLN: o último .pln feito pelo BIMcloud (se não houver, exporta o .BIMProject).",
+            text=t("content.pln_hint"),
             style="Muted.TLabel",
             foreground=self.colors["muted"],
         ).grid(row=5, column=0, columnspan=3, sticky="w", pady=(2, 0))
@@ -1085,7 +1100,7 @@ class App:
         origin = ttk.Frame(card)
         origin.grid(row=6, column=0, columnspan=3, sticky="ew", pady=(10, 0))
         origin.columnconfigure(1, weight=1)
-        ttk.Label(origin, text="Copiar do BIMcloud").grid(
+        ttk.Label(origin, text=t("content.copy_from")).grid(
             row=0, column=0, sticky="nw", padx=(0, 12), pady=(3, 0)
         )
         ttk.Label(
@@ -1095,18 +1110,18 @@ class App:
             foreground=self.colors["muted"],
             justify="left",
         ).grid(row=0, column=1, sticky="w", pady=(3, 0))
-        self.folders_button = ttk.Button(origin, text="Escolher...", command=self._choose_folders)
-        self.folders_button.grid(row=0, column=2, sticky="ne", padx=(8, 0))
-        self.folders_tooltip = Tooltip(
-            self.folders_button, lambda: self._blocked_hint("escolher o que copiar")
+        self.folders_button = ttk.Button(
+            origin, text=t("content.choose"), command=self._choose_folders
         )
+        self.folders_button.grid(row=0, column=2, sticky="ne", padx=(8, 0))
+        self.folders_tooltip = Tooltip(self.folders_button, lambda: self._blocked_hint("choose"))
         return card
 
     def _build_destination(self, parent: ttk.Frame) -> ttk.Frame:
-        card = self._card(parent, "folder", "3. Onde salvar", help_key="destination")
+        card = self._card(parent, "folder", t("destination.title"), help_key="destination")
         # Everything on the title row: a row of its own cost height the window does not have.
         card.head.grid_configure(pady=0)
-        ttk.Button(card.head, text="Procurar...", command=self._browse).pack(
+        ttk.Button(card.head, text=t("destination.browse"), command=self._browse).pack(
             side="right", padx=(8, 0)
         )
         ttk.Entry(card.head, textvariable=self.v["directory"]).pack(
@@ -1115,12 +1130,12 @@ class App:
         return card
 
     def _build_history(self, parent: ttk.Frame) -> ttk.Frame:
-        card = self._card(parent, "history", "4. Histórico")
+        card = self._card(parent, "history", t("history.title"))
         self._with_help(
             card,
             lambda f: ttk.Radiobutton(
                 f,
-                text="Manter histórico de backups",
+                text=t("history.keep_history"),
                 variable=self.v["versioning"],
                 value=VERSIONING_HISTORY,
                 command=self._sync_enabled,
@@ -1129,18 +1144,18 @@ class App:
         ).grid(row=1, column=0, columnspan=3, sticky="w")
         detail = ttk.Frame(card)
         detail.grid(row=2, column=0, columnspan=3, sticky="w", padx=(28, 0), pady=(2, 4))
-        ttk.Label(detail, text="por").grid(row=0, column=0)
+        ttk.Label(detail, text=t("history.for")).grid(row=0, column=0)
         self.retention_entry = _number_entry(detail, self.v["retention_days"])
         self.retention_entry.grid(row=0, column=1, padx=6)
-        ttk.Label(detail, text="dias, no mínimo").grid(row=0, column=2)
+        ttk.Label(detail, text=t("history.days_at_least")).grid(row=0, column=2)
         self.min_keep_entry = _number_entry(detail, self.v["min_backups_to_keep"])
         self.min_keep_entry.grid(row=0, column=3, padx=6)
-        ttk.Label(detail, text="backups").grid(row=0, column=4)
+        ttk.Label(detail, text=t("history.backups")).grid(row=0, column=4)
         self._with_help(
             card,
             lambda f: ttk.Radiobutton(
                 f,
-                text="Guardar só o último backup",
+                text=t("history.keep_latest"),
                 variable=self.v["versioning"],
                 value=VERSIONING_LATEST,
                 command=self._sync_enabled,
@@ -1150,7 +1165,7 @@ class App:
         return card
 
     def _build_schedule(self, parent: ttk.Frame) -> ttk.Frame:
-        card = self._card(parent, "calendar", "5. Backup automático")
+        card = self._card(parent, "calendar", t("schedule.title"))
         self.schedule_card = card
         ttk.Checkbutton(
             card.head,
@@ -1158,22 +1173,22 @@ class App:
             style="Switch.TCheckbutton",
             command=self._sync_enabled,
         ).pack(side="right")
-        # "A cada [2] [dias]" and, below, "às [23]:[00]": every day is 1 day, with no option of
+        # "Every [2] [days]" and, below, "at [23]:[00]": every day is 1 day, with no option of
         # its own. The time on the same row made the window wider.
-        self.every_label = ttk.Label(card, text="A cada")
+        self.every_label = ttk.Label(card, text=t("schedule.every"))
         self.every_label.grid(row=2, column=0, sticky="w", pady=2)
         every = ttk.Frame(card)
         every.grid(row=2, column=1, columnspan=2, sticky="w", padx=6, pady=2)
         self.every_entry = _number_entry(every, self.v["schedule_every"])
         self.every_entry.pack(side="left")
-        plurals = tuple(plural for _, plural in UNIT_NAMES.values())
+        plurals = tuple(unit_names(unit)[1] for unit in UNITS)
         self.unit_box = _choice_box(every, self.unit_label, plurals)
         self.unit_box.pack(side="left", padx=(6, 0))
         self._help(every, "every").pack(side="left", padx=(6, 0))
         self.unit_label.trace_add("write", lambda *_: self._choose_unit())
         for var in (self.v["schedule_every"], self.v["schedule_unit"]):
             var.trace_add("write", lambda *_: self._show_unit())
-        self.at_label = ttk.Label(card, text="às")
+        self.at_label = ttk.Label(card, text=t("schedule.at"))
         self.at_label.grid(row=3, column=0, sticky="w", pady=2)
         # Lists instead of free text: "8", "08" or "20" left doubts about what to type.
         at = ttk.Frame(card)
@@ -1191,7 +1206,7 @@ class App:
         logged_off.grid(row=4, column=0, columnspan=3, sticky="w", pady=(4, 0))
         self.logged_off_check = ttk.Checkbutton(
             logged_off,
-            text="Rodar mesmo sem ninguém conectado",
+            text=t("schedule.logged_off"),
             variable=self.v["run_logged_off"],
             command=self._sync_enabled,
         )
@@ -1208,37 +1223,40 @@ class App:
 
     def _build_advanced(self, parent: tk.Misc, keep: bool = True) -> ttk.Frame:
         """Rarely changed options, in a window of their own (see `_open_advanced`)."""
-        card = self._card(parent, "settings", "Opções avançadas")
+        card = self._card(parent, "settings", t("advanced.title"))
 
         def label(text: str, key: str) -> ttk.Frame:
             return self._with_help(card, lambda f: ttk.Label(f, text=text), key, keep)
 
-        label("Parar o backup depois de", "max_duration").grid(
+        label(t("advanced.stop_after"), "max_duration").grid(
             row=1, column=0, sticky="w", padx=(0, 12), pady=3
         )
         # One limit per row: side by side they made the card wider than the window.
         hours = ttk.Frame(card)
         hours.grid(row=1, column=1, columnspan=3, sticky="w")
         _number_entry(hours, self.v["max_duration_hours"]).pack(side="left", padx=(0, 6))
-        ttk.Label(hours, text="horas").pack(side="left")
-        label("ou se o disco ficar com menos de", "min_free_space").grid(
+        ttk.Label(hours, text=t("advanced.hours")).pack(side="left")
+        label(t("advanced.or_disk_below"), "min_free_space").grid(
             row=2, column=0, sticky="w", padx=(0, 12), pady=3
         )
         disk = ttk.Frame(card)
         disk.grid(row=2, column=1, columnspan=3, sticky="w")
         _number_entry(disk, self.v["min_free_space_gb"]).pack(side="left", padx=(0, 6))
-        ttk.Label(disk, text="GB livres").pack(side="left", padx=(0, 12))
+        ttk.Label(disk, text=t("advanced.gb_free")).pack(side="left", padx=(0, 12))
         ttk.Label(
-            disk, text="(0 = sem limite)", style="Muted.TLabel", foreground=self.colors["muted"]
+            disk, text=t("advanced.no_limit"), style="Muted.TLabel", foreground=self.colors["muted"]
         ).pack(side="left")
-        label("Identificador no BIMcloud (não altere)", "client_id").grid(
+        label(t("advanced.client_id"), "client_id").grid(
             row=3, column=0, sticky="w", padx=(0, 12), pady=3
         )
         extra = ttk.Frame(card)
         extra.grid(row=3, column=1, columnspan=3, sticky="w")
         ttk.Entry(extra, textvariable=self.v["client_id"], width=24).pack(side="left")
         ttk.Checkbutton(
-            extra, text="Log detalhado", variable=self.v["verbose"], style="Switch.TCheckbutton"
+            extra,
+            text=t("advanced.verbose"),
+            variable=self.v["verbose"],
+            style="Switch.TCheckbutton",
         ).pack(side="left", padx=(24, 0))
         self._help(extra, "verbose", keep).pack(side="left", padx=(4, 0))
         # A row of its own: next to the identifier it made the card wider than the window.
@@ -1246,7 +1264,7 @@ class App:
         notify.grid(row=4, column=1, columnspan=3, sticky="w", pady=(3, 0))
         notify_check = ttk.Checkbutton(
             notify,
-            text="Avisar no Windows se o backup automático falhar",
+            text=t("advanced.notify_failures"),
             variable=self.v["notify_failures"],
             style="Switch.TCheckbutton",
         )
@@ -1256,7 +1274,7 @@ class App:
             card,
             lambda f: ttk.Checkbutton(
                 f,
-                text="Abrir com o Windows, na área de notificação",
+                text=t("advanced.startup"),
                 variable=self.startup,
                 style="Switch.TCheckbutton",
             ),
@@ -1273,11 +1291,11 @@ class App:
     def _build_footer(self, parent: ttk.Frame) -> ttk.Frame:
         bar = ttk.Frame(parent)
         self.advanced_button = ttk.Button(
-            bar, text=f"{ICON['settings']}  Opções avançadas...", command=self._open_advanced
+            bar, text=f"{ICON['settings']}  {t('advanced.button')}", command=self._open_advanced
         )
         self.advanced_button.pack(side="left")
         self.save_button = ttk.Button(
-            bar, text="Salvar alterações", style="Accent.TButton", command=self._save
+            bar, text=t("gui.save_changes"), style="Accent.TButton", command=self._save
         )
         self.save_button.pack(side="right")
         ttk.Label(
@@ -1302,9 +1320,7 @@ class App:
             widget.configure(state="readonly" if auto and days else "disabled")
         self.logged_off_check.configure(state="normal" if auto else "disabled")
         self.logged_off_hint.set(
-            "Pede a sua senha do Windows ao salvar; o programa não a guarda."
-            if self.v["run_logged_off"].get()
-            else "Só roda com você conectado no Windows."
+            t("schedule.logged_off_on" if self.v["run_logged_off"].get() else "schedule.logged_on")
         )
         projects = self.v["include_projects"].get()
         for widget in self.project_format_widgets:
@@ -1327,13 +1343,13 @@ class App:
             self.splitting_run_at = False
 
     def _show_unit(self) -> None:
-        """The unit list in the singular for 1 ("A cada 1 dia"), in the plural otherwise."""
+        """The unit list in the singular for 1 ("Every 1 day"), in the plural otherwise."""
         unit = self.v["schedule_unit"].get()
         index = 0 if self.v["schedule_every"].get().strip() == "1" else 1
-        self.unit_box.configure(values=[UNIT_NAMES[u][index] for u in UNITS])
+        self.unit_box.configure(values=[unit_names(u)[index] for u in UNITS])
         self.showing_unit = True
         try:
-            self.unit_label.set(UNIT_NAMES[unit][index] if unit in UNIT_NAMES else unit)
+            self.unit_label.set(unit_names(unit)[index] if unit in UNITS else unit)
         finally:
             self.showing_unit = False
         self._sync_enabled()
@@ -1343,8 +1359,8 @@ class App:
         if self.showing_unit:
             return
         label = self.unit_label.get()
-        for unit, names in UNIT_NAMES.items():
-            if label in names:
+        for unit in UNITS:
+            if label in unit_names(unit):
                 self.v["schedule_unit"].set(unit)
                 return
 
@@ -1359,7 +1375,7 @@ class App:
     def _place_advanced(self) -> None:
         """Advanced options inside the window when the height left over holds them.
 
-        Otherwise they stay behind the "Opções avançadas..." button, in a window of their own,
+        Otherwise they stay behind the "Advanced options..." button, in a window of their own,
         and the cards of steps 4 and 5 take the height instead.
         """
         col = self.settings_column
@@ -1393,20 +1409,22 @@ class App:
     def _open_advanced(self) -> None:
         """Show the advanced options in a small window: inline they did not fit a notebook.
 
-        The fields share the main window's variables, so "Salvar alterações" saves them.
+        The fields share the main window's variables, so "Save changes" saves them.
         """
         if self.advanced_window is not None and self.advanced_window.winfo_exists():
             self.advanced_window.lift()
             return
         window = tk.Toplevel(self.root)
-        window.title("Opções avançadas")
+        window.title(t("advanced.title"))
         window.configure(background=self.colors["bg"])
         window.transient(self.root)
         window.resizable(False, False)
         body = ttk.Frame(window, padding=16)
         body.pack(fill="both", expand=True)
         self._build_advanced(body, keep=False).pack(fill="x")
-        ttk.Button(body, text="Fechar", command=window.destroy).pack(anchor="e", pady=(12, 0))
+        ttk.Button(body, text=t("button.close"), command=window.destroy).pack(
+            anchor="e", pady=(12, 0)
+        )
         self.advanced_window = window
 
     def _usable_screen(self) -> tuple[int, int]:
@@ -1468,7 +1486,7 @@ class App:
 
     def _set_dirty(self, dirty: bool) -> None:
         self.dirty = dirty
-        self.save_text.set("Alterações não salvas" if dirty else "Tudo salvo")
+        self.save_text.set(t("gui.unsaved" if dirty else "gui.all_saved"))
         if dirty:
             self.version_label.grid_remove()
             self.unsaved_banner.grid()
@@ -1487,18 +1505,59 @@ class App:
         )
 
     def _blocked_hint(self, action: str) -> str | None:
+        """`action`: "backup" or "choose", the end of the key of each hint."""
         if not self.dirty:
             return None
-        return f"Salve ou descarte as alterações antes de {action}."
+        return t(f"gui.blocked.{action}")
 
     def _discard(self) -> None:
         """Go back to what is saved in config.toml."""
         self._load_values()
         self._refresh_status()
 
+    def _change_language(self, language: str) -> None:
+        """Save the language and show the window in it at once.
+
+        The choice is hidden while there are unsaved changes (the banner takes its place), so
+        the form always matches config.toml here and nothing is lost when it is rebuilt.
+        """
+        if language == i18n.language():
+            return
+        if self.busy or self.picker_open:
+            self.language_choice.set(i18n.language())
+            messagebox.showinfo(APP_TITLE, t("gui.language_busy"))
+            return
+        try:
+            save_language(language, self.config_path)
+        except (ConfigError, OSError) as e:
+            self.language_choice.set(i18n.language())
+            messagebox.showerror(APP_TITLE, t("gui.save_failed", error=e))
+            return
+        i18n.set_language(language)
+        self._rebuild()
+
+    def _rebuild(self) -> None:
+        """Build the whole window again, in the current language, keeping the activity."""
+        activity = self.activity.get("1.0", "end-1c")
+        for child in self.root.winfo_children():
+            child.destroy()
+        # The "?" marks bind to the window itself; the old ones would pile up.
+        for sequence in ("<ButtonPress>", "<Configure>", "<Unmap>"):
+            self.root.unbind(sequence)
+        self.advanced_window = None
+        self._init_vars()
+        self._build()
+        self._load()
+        self._refresh_status()
+        self._refresh_auth()
+        if activity:
+            self._append(activity)
+        self.root.update_idletasks()
+        self._fit_minimum()
+
     def _browse(self) -> None:
         folder = filedialog.askdirectory(
-            title="Pasta de destino dos backups", initialdir=self.v["directory"].get() or None
+            title=t("destination.dialog"), initialdir=self.v["directory"].get() or None
         )
         if folder:
             self.v["directory"].set(folder)
@@ -1512,7 +1571,7 @@ class App:
         try:
             save_config(config, self.config_path)
         except OSError as e:
-            messagebox.showerror(APP_TITLE, f"Não foi possível salvar a configuração:\n{e}")
+            messagebox.showerror(APP_TITLE, t("gui.save_failed", error=e))
             return None
         try:
             if self.auto.get():
@@ -1520,16 +1579,13 @@ class App:
             elif _safe_schedule_status() is not None:
                 scheduler.remove()
         except (scheduler.SchedulerError, OSError) as e:
-            messagebox.showerror(APP_TITLE, f"Configuração salva, mas o agendamento falhou:\n{e}")
+            messagebox.showerror(APP_TITLE, t("gui.schedule_failed", error=e))
         try:
             # Written again when on: the program may have moved since.
             if self.startup.get() or _safe_starts_with_windows():
                 tray.set_start_with_windows(self.startup.get())
         except OSError as e:
-            messagebox.showerror(
-                APP_TITLE,
-                f"Configuração salva, mas não foi possível mudar a abertura com o Windows:\n{e}",
-            )
+            messagebox.showerror(APP_TITLE, t("gui.startup_failed", error=e))
         self._remember_saved()
         self._refresh_status()
         return config
@@ -1558,11 +1614,7 @@ class App:
             return
         password = self._ask_windows_password()
         if password is None:
-            messagebox.showinfo(
-                APP_TITLE,
-                "Configuração salva. O backup automático não foi alterado, porque a senha "
-                "do Windows não foi informada.",
-            )
+            messagebox.showinfo(APP_TITLE, t("gui.no_password"))
             return
         scheduler.install(config, path, password)
 
@@ -1570,10 +1622,7 @@ class App:
         """The Windows password, only to hand to the Task Scheduler; never stored here."""
         return simpledialog.askstring(
             APP_TITLE,
-            "Para o backup rodar sem ninguém conectado, o Agendador de Tarefas do Windows\n"
-            f"precisa da senha de {scheduler.windows_account()}.\n\n"
-            "A senha vai direto para o Windows; o programa não a guarda.\n"
-            "Se você trocar a senha do Windows, clique de novo em Salvar alterações.",
+            t("gui.password_prompt", account=scheduler.windows_account()),
             show="•",
             parent=self.root,
         )
@@ -1582,7 +1631,7 @@ class App:
         config = self._config(for_connection_only=True)
         if config is None:
             return
-        self._set_auth("Aguardando o login no navegador...", "warn")
+        self._set_auth(t("auth.waiting"), "warn")
         self.login_button.configure(state="disabled")
 
         def opened(url: object) -> None:
@@ -1599,8 +1648,8 @@ class App:
             self.login_link.grid_remove()
             self.login_button.configure(state="normal")
             if isinstance(result, Exception):
-                self._set_auth("Não conectado", "bad")
-                messagebox.showerror(APP_TITLE, f"Não foi possível entrar:\n{redact(str(result))}")
+                self._set_auth(t("auth.not_signed_in"), "bad")
+                messagebox.showerror(APP_TITLE, t("auth.sign_in_failed", error=redact(str(result))))
             else:
                 self._set_signed_in(result)
 
@@ -1611,23 +1660,23 @@ class App:
             return
         self.root.clipboard_clear()
         self.root.clipboard_append(self.login_url)
-        self._set_auth("Endereço copiado: abra em qualquer navegador", "warn")
+        self._set_auth(t("auth.url_copied"), "warn")
 
     def _refresh_auth(self) -> None:
         config = self._config(for_connection_only=True, quiet=True)
         if config is None or not self.store.load(config.server_url):
-            self._set_auth("Não conectado", "muted")
+            self._set_auth(t("auth.not_signed_in"), "muted")
             return
 
         def done(result: Any) -> None:
             if isinstance(result, AuthError):
-                self._set_auth("Acesso expirado: entre novamente", "bad")
+                self._set_auth(t("auth.expired"), "bad")
             elif isinstance(result, Exception):
-                self._set_auth("Sem conexão com o BIMcloud", "warn")
+                self._set_auth(t("auth.no_connection"), "warn")
             else:
                 self._set_signed_in(result)
 
-        self._set_auth("Verificando...", "muted")
+        self._set_auth(t("auth.checking"), "muted")
         self._background(lambda: service.signed_in_user(config, self.store), done)
 
     def _choose_folders(self) -> None:
@@ -1637,11 +1686,7 @@ class App:
         if config is None:
             return
         if not self.store.load(config.server_url):
-            messagebox.showinfo(
-                APP_TITLE,
-                "Para ver as pastas, entre primeiro no BIMcloud "
-                "(botão “Entrar no BIMcloud”, em Conexão com o BIMcloud).",
-            )
+            messagebox.showinfo(APP_TITLE, t("picker.sign_in_first"))
             return
         session = requests.Session()
         lock = threading.Lock()
@@ -1650,7 +1695,7 @@ class App:
 
         def check() -> None:
             if stop.is_set():
-                raise BimcloudError("Carregamento cancelado")
+                raise BimcloudError(t("picker.cancelled"))
 
         def load(path: str) -> service.FolderListing:
             # The whole tree comes in one listing, the first time; opening a folder after
@@ -1660,7 +1705,7 @@ class App:
                     browser = service.open_folder_browser(session, config, self.store)
                     tree.update(browser.tree(check))
                 if path not in tree:
-                    raise BimcloudError(f"Pasta não encontrada: {path}")
+                    raise BimcloudError(t("picker.folder_not_found", path=path))
                 return tree[path]
 
         def close() -> None:
@@ -1673,7 +1718,7 @@ class App:
         self._sync_actions()
         FolderPicker(
             self.root,
-            "Escolher o que copiar do BIMcloud",
+            t("picker.title"),
             self.selection,
             load,
             self._background,
@@ -1701,8 +1746,8 @@ class App:
         # Long names (e-mails) would push the status into the card title.
         if len(username) > MAX_USERNAME_CHARS:
             username = username[: MAX_USERNAME_CHARS - 1] + "…"
-        self._set_auth(f"Conectado como {username}", "ok")
-        self.login_button.configure(text="Entrar novamente")
+        self._set_auth(t("auth.signed_in", username=username), "ok")
+        self.login_button.configure(text=t("connection.sign_in_again"))
 
     def _refresh_status(self) -> None:
         self._show_last_run(load_last_run())
@@ -1719,9 +1764,9 @@ class App:
         frame.rowconfigure(1, weight=1)
         head = ttk.Frame(frame)
         head.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 4))
-        ttk.Label(head, text="Backups guardados", style="Heading.TLabel").pack(side="left")
+        ttk.Label(head, text=t("saved.title"), style="Heading.TLabel").pack(side="left")
         self.open_backup_button = ttk.Button(
-            head, text="Abrir pasta", command=self._open_selected_backup, state="disabled"
+            head, text=t("saved.open_folder"), command=self._open_selected_backup, state="disabled"
         )
         self.open_backup_button.pack(side="right")
         # Sized like the activity box below, so the column (and the window) never widens.
@@ -1732,8 +1777,8 @@ class App:
             height=1,
             selectmode="browse",
         )
-        for column, title in HISTORY_COLUMNS:
-            self.history_tree.heading(column, text=title, anchor="w")
+        for column in HISTORY_COLUMNS:
+            self.history_tree.heading(column, text=t(f"saved.column.{column}"), anchor="w")
             self.history_tree.column(column, stretch=True, anchor="w")
         self._size_history_columns()
         scroll = ttk.Scrollbar(frame, orient="vertical", command=self.history_tree.yview)
@@ -1765,8 +1810,9 @@ class App:
             font = tkfont.nametofont("SunValleyBodyFont", root=self.root)
         except tk.TclError:
             font = tkfont.nametofont("TkDefaultFont", root=self.root)
-        for column, title in HISTORY_COLUMNS:
-            longest = max(font.measure(text) for text in (title, *HISTORY_LONGEST[column]))
+        for column in HISTORY_COLUMNS:
+            title = t(f"saved.column.{column}")
+            longest = max(font.measure(text) for text in (title, *history_longest(column)))
             width = longest + self.px(10)
             self.history_tree.column(column, width=width, minwidth=width)
 
@@ -1792,9 +1838,7 @@ class App:
                 values=(_history_when(entry), _history_size(entry), _history_status(entry)),
             )
         if not entries:
-            self.history_detail.set(
-                "Nenhum backup nesta pasta ainda." if directory else "Escolha a pasta de destino."
-            )
+            self.history_detail.set(t("saved.none" if directory else "saved.no_destination"))
         if selected and self.history_tree.exists(selected[0]):
             self.history_tree.selection_set(selected[0])
         self._show_history_detail()
@@ -1811,9 +1855,9 @@ class App:
         )
         if entry is not None:
             detail = _history_detail(entry)
-            self.history_detail.set(f"{detail} · ver quais" if with_errors else detail)
+            self.history_detail.set(t("saved.see_which", text=detail) if with_errors else detail)
         elif self.history_entries:
-            self.history_detail.set("Selecione um backup para ver o que ele tem.")
+            self.history_detail.set(t("saved.select"))
 
     def _show_history_failures(self) -> None:
         selected = self.history_tree.selection()
@@ -1829,9 +1873,7 @@ class App:
         """The items that failed in one backup, in plain words, in a window of their own."""
         manifest = load_manifest(folder)
         if manifest is None:
-            messagebox.showinfo(
-                APP_TITLE, "Não foi possível ler o resumo deste backup (.backup.json)."
-            )
+            messagebox.showinfo(APP_TITLE, t("saved.manifest_unreadable"))
             return
         fonts = (self.f_heading, self.f_text, self.f_small)
         FailuresWindow(self.root, manifest.failures, folder.name, self.colors, fonts)
@@ -1844,7 +1886,7 @@ class App:
         try:
             os.startfile(entry.folder)  # type: ignore[attr-defined]  # Windows only
         except OSError:
-            messagebox.showinfo(APP_TITLE, "Essa pasta não existe mais.")
+            messagebox.showinfo(APP_TITLE, t("saved.folder_gone"))
             self._refresh_history()
 
     def _show_last_run(self, run: LastRun | None) -> None:
@@ -1856,44 +1898,44 @@ class App:
             self.last_icon.configure(
                 text=ICON["empty"], style="BigIcon.TLabel", foreground=self.colors["muted"]
             )
-            self.last_title.set("Nenhum ainda")
-            self.last_detail.set("Clique em “Fazer backup agora” para o primeiro.")
+            self.last_title.set(t("status.none_yet"))
+            self.last_detail.set(t("status.first_backup"))
             return
         when = _friendly_time(run.finished)
         if run.status == STATUS_CANCELLED:
             self.last_icon.configure(
                 text=ICON["warning"], style="BigIcon.TLabel", foreground=self.colors["warn"]
             )
-            self.last_title.set("Cancelado")
-            self.last_detail.set(f"{when} · nenhum backup antigo foi apagado")
+            self.last_title.set(t("status.cancelled"))
+            self.last_detail.set(t("status.cancelled_detail", when=when))
             return
         if run.status == STATUS_FAILED:
             self.last_icon.configure(
                 text=ICON["error"], style="BigIcon.TLabel", foreground=self.colors["bad"]
             )
-            self.last_title.set("Falhou")
+            self.last_title.set(t("status.failed"))
             self.last_detail.set(f"{when} · {run.message}")
             return
-        size = f"{_format_count(run.files)} arquivos · {_format_bytes(run.bytes)}"
+        size = f"{plural('status.files', run.files)} · {_format_bytes(run.bytes)}"
         if run.status == STATUS_OK:
             self.last_icon.configure(
                 text=ICON["check"], style="BigIcon.TLabel", foreground=self.colors["ok"]
             )
-            self.last_title.set("Concluído")
+            self.last_title.set(t("status.finished"))
             self.last_detail.set(f"{when} · {size}")
             return
         # The errors line is a link to the list of items (see `last_failures_link`).
-        notes = [f"{run.pending} projetos/bibliotecas pendentes"] if run.pending else []
+        notes = [t("status.pending", count=run.pending)] if run.pending else []
         self.last_icon.configure(
             text=ICON["warning"], style="BigIcon.TLabel", foreground=self.colors["warn"]
         )
-        self.last_title.set("Concluído com avisos" if not run.errors else "Concluído com erros")
+        self.last_title.set(t("status.with_errors" if run.errors else "status.with_warnings"))
         self.last_detail.set("\n".join([f"{when} · {size}", *notes]))
         if run.errors:
-            failed = "1 item com erro" if run.errors == 1 else f"{run.errors} itens com erro"
+            failed = plural("status.items_with_errors", run.errors)
             self.last_run_folder = run.folder
             self.last_failures_link.configure(
-                text=f"{failed} · ver quais" if run.folder else failed,
+                text=t("saved.see_which", text=failed) if run.folder else failed,
                 cursor="hand2" if run.folder else "",
             )
             self.last_failures_link.grid()
@@ -1901,27 +1943,28 @@ class App:
     def _show_next_run(self) -> None:
         config = self._config(for_connection_only=True, quiet=True)
         if _safe_schedule_status() is None or config is None:
-            self.next_title.set("Backup automático desligado")
-            self.next_detail.set("Ligue em “Backup automático” e salve.")
+            self.next_title.set(t("status.auto_off"))
+            self.next_detail.set(t("status.auto_off_hint"))
             return
         if (config.schedule_every, config.schedule_unit) == (1, UNIT_DAYS):
             now = datetime.now()
             target = datetime.combine(now.date(), config.run_at)
             if target <= now:
                 target += timedelta(days=1)
-            self.next_title.set(f"Próximo backup {_friendly_time(target)}")
+            self.next_title.set(t("status.next_backup", when=_friendly_time(target)))
         else:
-            self.next_title.set("Backup automático ligado")
+            self.next_title.set(t("status.auto_on"))
         when = describe_schedule(config)
         # Read from the task itself, not from the settings: that is what will happen.
-        mode = RUN_MODE_TEXT.get(_safe_run_mode() or "", "")
+        mode_key = RUN_MODE_TEXT.get(_safe_run_mode() or "")
+        mode = t(mode_key) if mode_key else ""
         self.next_detail.set(f"{when}\n{mode}" if mode else when)
 
     def _show_disk(self) -> None:
         directory = self.v["directory"].get().strip()
         if not directory:
-            self.disk_title.set("Destino não definido")
-            self.disk_detail.set("Escolha a pasta em “Onde salvar”.")
+            self.disk_title.set(t("status.no_destination"))
+            self.disk_detail.set(t("status.no_destination_hint"))
             self.disk_bar.configure(value=0)
             return
         path = Path(directory)
@@ -1929,12 +1972,14 @@ class App:
         try:
             usage = shutil.disk_usage(probe)
         except OSError:
-            self.disk_title.set("Destino indisponível")
+            self.disk_title.set(t("status.destination_unavailable"))
             self.disk_detail.set(directory)
             self.disk_bar.configure(value=0)
             return
-        self.disk_title.set(f"{_format_bytes(usage.free)} livres")
-        self.disk_detail.set(f"de {_format_bytes(usage.total)} em {path.anchor or directory}")
+        self.disk_title.set(t("status.free", size=_format_bytes(usage.free)))
+        self.disk_detail.set(
+            t("status.disk", total=_format_bytes(usage.total), drive=path.anchor or directory)
+        )
         self.disk_bar.configure(value=100 * usage.used / usage.total if usage.total else 0)
 
     def _run_backup(self) -> None:
@@ -1947,9 +1992,9 @@ class App:
         self.busy = True
         self.cancel_event = threading.Event()
         cancel = self.cancel_event
-        self.run_button.configure(text="Fazendo backup...")
+        self.run_button.configure(text=t("status.backing_up"))
         self._sync_actions()
-        self.cancel_button.configure(state="normal", text="Cancelar backup")
+        self.cancel_button.configure(state="normal", text=t("status.cancel_backup"))
         self.running.grid()
         self.history_panel.grid_remove()
         self.progress_panel.grid()
@@ -1957,8 +2002,8 @@ class App:
         self.status_column.rowconfigure(5, weight=0)
         self._show_progress(Progress())
         self._update_tray_tip()
-        self._append(f"Backup iniciado → {config.backup_dir}")
-        self._append(BROWSER_WARNING)
+        self._append(t("status.backup_started", folder=config.backup_dir))
+        self._append(t("status.browser_warning"))
 
         def work() -> Any:
             setup_logging(config.verbose_logging)
@@ -1978,7 +2023,7 @@ class App:
         self.progress_panel.grid_remove()
         self.history_panel.grid()
         self.status_column.rowconfigure(5, weight=1)
-        self.run_button.configure(text=f"{ICON['download']}   Fazer backup agora")
+        self.run_button.configure(text=f"{ICON['download']}   {t('status.back_up_now')}")
         self._sync_actions()
         if self.closing:
             # The window was closed during the backup: it stopped safely, now close.
@@ -1988,21 +2033,17 @@ class App:
         if self.tray_icon is not None and self.tray_icon.running and not self.root.winfo_viewable():
             # The window is in the notification area: a notice there instead of a dialog.
             if isinstance(result, BackupCancelled):
-                self._append("Backup cancelado. Nenhum backup antigo foi apagado.")
+                self._append(t("cli.run.cancelled"))
             self.tray_icon.balloon(APP_TITLE, _tray_result(result))
             return
         if isinstance(result, BackupCancelled):
-            self._append("Backup cancelado. Nenhum backup antigo foi apagado.")
-            messagebox.showinfo(
-                APP_TITLE,
-                "Backup cancelado.\n\nO que tinha sido copiado nesta execução foi descartado e "
-                "nenhum backup antigo foi apagado.",
-            )
+            self._append(t("cli.run.cancelled"))
+            messagebox.showinfo(APP_TITLE, t("status.cancelled_dialog"))
         elif isinstance(result, AuthError):
-            self._set_auth("Acesso expirado: entre novamente", "bad")
-            messagebox.showerror(APP_TITLE, "Entre no BIMcloud novamente para fazer o backup.")
+            self._set_auth(t("auth.expired"), "bad")
+            messagebox.showerror(APP_TITLE, t("status.sign_in_again"))
         elif isinstance(result, Exception):
-            messagebox.showerror(APP_TITLE, f"O backup falhou:\n{redact(str(result))}")
+            messagebox.showerror(APP_TITLE, t("status.backup_failed", error=redact(str(result))))
 
     def _show_progress(self, progress: Progress) -> None:
         bar = self.progress
@@ -2010,7 +2051,7 @@ class App:
             if str(bar.cget("mode")) != "indeterminate":
                 bar.configure(mode="indeterminate")
             bar.start(12)
-            self.progress_title.set("Listando o BIMcloud...")
+            self.progress_title.set(t("progress.listing"))
             self.progress_current.set("")
             self.progress_files.set("")
             return
@@ -2030,19 +2071,15 @@ class App:
     def _cancel_backup(self) -> None:
         if not self.busy or self.cancel_event.is_set():
             return
-        if not messagebox.askyesno(
-            APP_TITLE,
-            "Cancelar o backup em andamento?\n\nO que já foi copiado nesta execução será "
-            "descartado. Os backups anteriores ficam como estão.",
-        ):
+        if not messagebox.askyesno(APP_TITLE, t("status.cancel_question")):
             return
         self.request_cancel()
 
     def request_cancel(self) -> None:
         """Ask the running backup to stop at its next check."""
         self.cancel_event.set()
-        self.cancel_button.configure(state="disabled", text="Cancelando...")
-        self._append("Cancelando: o backup para no próximo ponto seguro...")
+        self.cancel_button.configure(state="disabled", text=t("status.cancelling"))
+        self._append(t("status.cancelling_detail"))
 
     def _open_logs(self) -> None:
         directory = log_dir()
@@ -2065,11 +2102,7 @@ class App:
         self.root.withdraw()
         if not self.tray_notice_shown and self.tray_icon is not None:
             self.tray_notice_shown = True
-            self.tray_icon.balloon(
-                APP_TITLE,
-                "O programa continua aberto aqui. Para sair, clique com o botão direito no "
-                "ícone e escolha Sair.",
-            )
+            self.tray_icon.balloon(APP_TITLE, t("tray.still_open"))
 
     def _show_window(self) -> None:
         root = self.root
@@ -2107,18 +2140,13 @@ class App:
         if self.dirty and not self._settle_changes():
             return
         if self.busy:
-            if not messagebox.askyesno(
-                APP_TITLE,
-                "Um backup está em andamento. Fechar mesmo assim?\n\nO backup será cancelado "
-                "com segurança e a janela fecha em seguida. Os backups anteriores ficam como "
-                "estão.",
-            ):
+            if not messagebox.askyesno(APP_TITLE, t("status.close_question")):
                 return
             # Same safe stop as the Cancel button; the window closes when the backup ends.
             self.closing = True
             if not self.cancel_event.is_set():
                 self.request_cancel()
-            self._append("A janela fecha assim que o backup parar.")
+            self._append(t("status.closing"))
             return
         self._close_window()
 
@@ -2142,9 +2170,9 @@ class App:
         dialog.resizable(False, False)
         body = ttk.Frame(dialog, padding=20)
         body.pack(fill="both", expand=True)
-        ttk.Label(
-            body, text="Você tem alterações não salvas.\nSalvar antes de fechar?", justify="left"
-        ).pack(anchor="w", pady=(0, 16))
+        ttk.Label(body, text=t("gui.unsaved_question"), justify="left").pack(
+            anchor="w", pady=(0, 16)
+        )
         buttons = ttk.Frame(body)
         buttons.pack(anchor="e")
 
@@ -2153,12 +2181,12 @@ class App:
             dialog.destroy()
 
         ttk.Button(
-            buttons, text="Salvar", style="Accent.TButton", command=lambda: choose("save")
+            buttons, text=t("button.save"), style="Accent.TButton", command=lambda: choose("save")
         ).pack(side="left", padx=(0, 8))
-        ttk.Button(buttons, text="Descartar", command=lambda: choose("discard")).pack(
+        ttk.Button(buttons, text=t("button.discard"), command=lambda: choose("discard")).pack(
             side="left", padx=(0, 8)
         )
-        ttk.Button(buttons, text="Cancelar", command=lambda: choose(None)).pack(side="left")
+        ttk.Button(buttons, text=t("button.cancel"), command=lambda: choose(None)).pack(side="left")
         dialog.protocol("WM_DELETE_WINDOW", lambda: choose(None))
         dialog.bind("<Escape>", lambda _event: choose(None))
         if self.root.winfo_viewable():
@@ -2183,7 +2211,7 @@ class App:
             except (BimcloudError, OSError, ConfigError) as e:
                 result = e
             except Exception as e:  # noqa: BLE001 - shown to the user instead of lost
-                get_logger().exception("Erro inesperado")
+                get_logger().exception(t("gui.unexpected_error"))
                 result = e
             self.events.put(("done", (done, result)))
 
@@ -2228,23 +2256,25 @@ def _progress_texts(progress: Progress) -> tuple[str, str, str]:
     """The three lines of the progress panel: what is counted, what is exported now, files."""
     files = ""
     if progress.files_total:
-        files = (
-            f"Arquivos: {_format_count(progress.files_done)} de "
-            f"{_format_count(progress.files_total)} ({_format_bytes(progress.bytes_done)} de "
-            f"{_format_bytes(progress.bytes_total)})"
+        files = t(
+            "backup.files_progress",
+            done=format_count(progress.files_done),
+            total=format_count(progress.files_total),
+            bytes_done=_format_bytes(progress.bytes_done),
+            bytes_total=_format_bytes(progress.bytes_total),
         )
     if progress.exports_total:
-        title = f"Projetos e bibliotecas: {progress.exports_done} de {progress.exports_total}"
+        title = t("progress.exports", done=progress.exports_done, total=progress.exports_total)
     elif progress.files_total:
         title, files = files, ""
     else:
-        title = "Nada para copiar"
+        title = t("progress.nothing")
     current = ""
     if progress.current:
         name = progress.current.rsplit("/", 1)[-1]
         if len(name) > CURRENT_NAME_LIMIT:
             name = name[: CURRENT_NAME_LIMIT - 1] + "…"
-        current = f"Agora: {name}"
+        current = t("progress.now", name=name)
         if progress.detail:
             # Name and job status on one line: the panel has no room for another.
             room = CURRENT_LINE_LIMIT - len(progress.detail) - 3
@@ -2260,7 +2290,7 @@ def _number(value: Any, kind: type, label: str) -> Any:
     try:
         return kind(float(text)) if kind is int and float(text).is_integer() else kind(text)
     except ValueError as e:
-        raise ConfigError(f"{label}: valor inválido ({value})") from e
+        raise ConfigError(t("gui.invalid_value", label=label, value=value)) from e
 
 
 def _number_entry(parent: tk.Widget, variable: tk.Variable) -> ttk.Entry:
@@ -2301,56 +2331,62 @@ def _split_time(text: str) -> tuple[str, str] | None:
 
 def _history_when(entry: history.HistoryEntry) -> str:
     # No year: it did not fit the column. The detail line below the list shows the full date.
-    return f"{entry.when:%d/%m %H:%M}"
+    return format_date(entry.when, "format.short_datetime")
 
 
 def _history_size(entry: history.HistoryEntry) -> str:
     return "—" if entry.size is None else _format_bytes(entry.size)
 
 
+# The status of a backup in the list, by the end of its key ("history.status.<status>").
+HISTORY_STATUSES = {
+    history.STATUS_OK: "ok",
+    history.STATUS_WARNINGS: "warnings",
+    history.STATUS_INCOMPLETE: "incomplete",
+    history.STATUS_NO_DETAILS: "no_details",
+}
+
+
 def _history_status(entry: history.HistoryEntry) -> str:
-    if entry.status == history.STATUS_OK:
-        return "Concluído"
-    if entry.status == history.STATUS_WARNINGS:
-        return f"Com avisos ({entry.errors})"
-    if entry.status == history.STATUS_INCOMPLETE:
-        return "Incompleto"
-    return "Sem detalhes"
+    status = HISTORY_STATUSES.get(entry.status, "no_details")
+    return t(f"history.status.{status}", count=entry.errors)
 
 
 def _history_detail(entry: history.HistoryEntry) -> str:
     """The full date, then counts only: names of projects or files are never shown here."""
-    when = f"{entry.when:%d/%m/%Y %H:%M}"
+    when = format_date(entry.when, "format.datetime")
     if entry.status == history.STATUS_INCOMPLETE:
-        return f"{when} · Backup interrompido. Esta pasta é apagada no próximo backup."
+        return f"{when} · {t('saved.incomplete')}"
     if entry.status == history.STATUS_NO_DETAILS:
-        return f"{when} · Sem detalhes: o resumo do backup (.backup.json) falta ou está danificado."
-    parts = [f"{_format_count(count)}\u00a0{label}" for label, count in entry.counts]
-    text = " · ".join(parts) if parts else "Nenhum arquivo"
+        return f"{when} · {t('saved.no_details')}"
+    parts = [
+        plural("saved.files", count)
+        if label == history.FILES
+        else f"{format_count(count)}\u00a0{label}"
+        for label, count in entry.counts
+    ]
+    text = " · ".join(parts) if parts else t("saved.no_files")
     if entry.errors:
-        text += f" · {entry.errors} {'item' if entry.errors == 1 else 'itens'} com erro"
+        text += f" · {plural('saved.items_with_errors', entry.errors)}"
     return f"{when} · {text}"
 
 
 def _format_bytes(size: float) -> str:
-    """Size in Brazilian Portuguese; a non-breaking space keeps "18,6" and "GB" together."""
+    """Size in the chosen language ("18.6 GB" or "18,6 GB")."""
     for unit in ("B", "KB", "MB", "GB"):
         if size < 1024:
-            number = f"{size:.0f}" if unit == "B" else f"{size:.1f}".replace(".", ",")
+            number = f"{size:.0f}" if unit == "B" else format_decimal(size)
             return f"{number} {unit}"
         size /= 1024
-    return f"{size:.1f}".replace(".", ",") + " TB"
-
-
-def _format_count(n: int) -> str:
-    return f"{n:,}".replace(",", ".")
+    return f"{format_decimal(size)} TB"
 
 
 def _friendly_time(moment: datetime, now: datetime | None = None) -> str:
     now = now or datetime.now()
     days = (moment.date() - now.date()).days
-    day = {0: "hoje", -1: "ontem", 1: "amanhã"}.get(days, f"{moment:%d/%m}")
-    return f"{day} às {moment:%H:%M}"
+    names = {0: "time.today", -1: "time.yesterday", 1: "time.tomorrow"}
+    day = t(names[days]) if days in names else format_date(moment, "format.day")
+    return t("time.at", day=day, time=f"{moment:%H:%M}")
 
 
 def _started(icon: tray.TrayIcon | None, post: Callable[[str], None]) -> tray.TrayIcon | None:
@@ -2361,18 +2397,18 @@ def _started(icon: tray.TrayIcon | None, post: Callable[[str], None]) -> tray.Tr
 def _tray_tip(busy: bool, run: LastRun | None) -> str:
     """The icon's tooltip: how the last backup went, or that one is running now."""
     if busy:
-        state = "Backup em andamento"
+        state = t("tray.tip.running")
     elif run is None:
-        state = "Nenhum backup ainda"
+        state = t("tray.tip.none")
     else:
         if run.status == STATUS_OK:
-            state = "Último backup concluído"
+            state = t("tray.tip.ok")
         elif run.status == STATUS_FAILED:
-            state = "Último backup falhou"
+            state = t("tray.tip.failed")
         elif run.status == STATUS_CANCELLED:
-            state = "Último backup cancelado"
+            state = t("tray.tip.cancelled")
         else:
-            state = "Último backup com erros" if run.errors else "Último backup com avisos"
+            state = t("tray.tip.errors" if run.errors else "tray.tip.warnings")
         state += f", {_friendly_time(run.finished)}"
     return f"{APP_TITLE}\n{state}"
 
@@ -2380,12 +2416,12 @@ def _tray_tip(busy: bool, run: LastRun | None) -> str:
 def _tray_result(result: Any) -> str:
     """The notice next to the icon when a backup started in the window ends with it hidden."""
     if isinstance(result, BackupCancelled):
-        return "Backup cancelado. Nenhum backup antigo foi apagado."
+        return t("cli.run.cancelled")
     if isinstance(result, AuthError):
-        return "Entre no BIMcloud novamente para fazer o backup."
+        return t("status.sign_in_again")
     if isinstance(result, Exception):
-        return "O backup falhou. Abra o programa para ver os detalhes."
-    return "Backup concluído."
+        return t("tray.result.failed")
+    return t("tray.result.ok")
 
 
 def _safe_starts_with_windows() -> bool:
@@ -2409,9 +2445,10 @@ def _safe_run_mode() -> str | None:
         return None
 
 
+# Keys of the texts, by how the task logs on.
 RUN_MODE_TEXT = {
-    scheduler.MODE_ALWAYS: "Mesmo sem ninguém conectado",
-    scheduler.MODE_LOGGED_ON: "Só com você conectado no Windows",
+    scheduler.MODE_ALWAYS: "status.mode_always",
+    scheduler.MODE_LOGGED_ON: "status.mode_logged_on",
 }
 
 
@@ -2427,13 +2464,15 @@ def _task_times(config: Config) -> tuple[Any, ...]:
 
 
 def describe_schedule(config: Config) -> str:
-    """For example "Todo dia às 23:00", "A cada 2 dias às 23:00" or "A cada 30 minutos"."""
+    """For example "Every day at 23:00", "Every 2 days at 23:00" or "Every 30 minutes"."""
     every, unit = config.schedule_every, config.schedule_unit
     if unit == UNIT_DAYS:
-        start = "Todo dia" if every == 1 else f"A cada {every} dias"
-        return f"{start} às {config.run_at:%H:%M}"
-    singular, plural = UNIT_NAMES[unit]
-    return f"A cada {singular}" if every == 1 else f"A cada {every} {plural}"
+        start = t("schedule.every_day") if every == 1 else t("schedule.every_n_days", count=every)
+        return t("schedule.days_at", start=start, time=f"{config.run_at:%H:%M}")
+    singular, plural_name = unit_names(unit)
+    if every == 1:
+        return t("schedule.every_one", unit=singular)
+    return t("schedule.every_n", count=every, unit=plural_name)
 
 
 def _file_schedule(values: dict[str, Any]) -> tuple[str, str]:
@@ -2449,6 +2488,86 @@ def _file_schedule(values: dict[str, Any]) -> tuple[str, str]:
             unit = UNIT_MINUTES if "interval_minutes" in values else UNIT_DAYS
         return str(values.get("every", values.get("interval_minutes", ""))), unit
     return str(every), unit
+
+
+class LanguageDialog:
+    """The first window of a new installation: English or Brazilian Portuguese.
+
+    Its texts are in both languages, since none was chosen yet. English starts selected.
+    """
+
+    def __init__(self, root: tk.Misc):
+        self.choice: str | None = None
+        self.window = window = tk.Toplevel(root)
+        window.title(APP_TITLE)
+        window.resizable(False, False)
+        # Wide enough for the whole title.
+        window.minsize(round(340 * _scale(window)), 0)
+        with contextlib.suppress(tk.TclError):
+            self.icons = [
+                tk.PhotoImage(master=window, file=(ASSETS / f"icon-{size}.png").as_posix())
+                for size in WINDOW_ICON_SIZES
+            ]
+            window.iconphoto(False, *self.icons)
+        body = ttk.Frame(window, padding=24)
+        body.pack(fill="both", expand=True)
+        heading = tkfont.nametofont("TkDefaultFont").copy()
+        heading.configure(size=12, weight="bold")
+        self.heading_font = heading
+        ttk.Label(body, text="Choose your language", font=heading).pack(anchor="w")
+        ttk.Label(body, text="Escolha o idioma").pack(anchor="w", pady=(2, 14))
+        self.language = tk.StringVar(master=window, value=i18n.DEFAULT_LANGUAGE)
+        for code, name in LANGUAGES.items():
+            ttk.Radiobutton(
+                body,
+                text=name,
+                value=code,
+                variable=self.language,
+                command=self._show_choice,
+            ).pack(anchor="w", pady=2)
+        self.button = ttk.Button(body, command=self.confirm, default="active")
+        self.button.pack(anchor="e", pady=(18, 0))
+        self._show_choice()
+        window.protocol("WM_DELETE_WINDOW", self.close)
+        window.bind("<Return>", lambda _event: self.confirm())
+        window.bind("<Escape>", lambda _event: self.close())
+        _center(window)
+        window.lift()
+        window.focus_force()
+        self.button.focus_set()
+
+    def _show_choice(self) -> None:
+        """The button speaks the language that is selected."""
+        self.button.configure(text=DIALOG_CONTINUE[self.language.get()])
+
+    def confirm(self) -> None:
+        self.choice = self.language.get()
+        self.window.destroy()
+
+    def close(self) -> None:
+        self.window.destroy()
+
+
+DIALOG_CONTINUE = {i18n.ENGLISH: "Continue", i18n.PORTUGUESE: "Continuar"}
+
+
+def ask_language(root: tk.Misc) -> str | None:
+    """The language chosen in the first window; None when it was closed without a choice."""
+    dialog = LanguageDialog(root)
+    root.wait_window(dialog.window)
+    return dialog.choice
+
+
+def _scale(widget: tk.Misc) -> float:
+    """The Windows scale (1.5 at 150%), as the main window computes it."""
+    return max(1.0, float(widget.tk.call("tk", "scaling")) * 72 / 96)
+
+
+def _center(window: tk.Toplevel) -> None:
+    window.update_idletasks()
+    x = (window.winfo_screenwidth() - window.winfo_reqwidth()) // 2
+    y = (window.winfo_screenheight() - window.winfo_reqheight()) // 3
+    window.geometry(f"+{max(x, 0)}+{max(y, 0)}")
 
 
 def _enable_dpi_awareness() -> None:
@@ -2474,6 +2593,18 @@ def run_gui(config_path: Path, store: TokenStore, tray_only: bool = False) -> in
     root = tk.Tk()
     # Hidden while it is built; then shown, unless it starts with only the icon.
     root.withdraw()
+    language = saved_language(config_path)
+    if language is None and not tray_only:
+        # The first thing a new user sees: the language, in a window of its own.
+        # Closed without a choice: English this time, and the question comes back next time.
+        language = ask_language(root)
+        if language is not None:
+            try:
+                save_language(language, config_path)
+            except (ConfigError, OSError):
+                # Asked again next time; the window still opens in the chosen language.
+                get_logger().warning("Could not save the language", exc_info=True)
+    i18n.set_language(language)
     app = App(root, config_path, store, tray.TrayIcon(APP_TITLE))
     if not (tray_only and app.tray_icon is not None and app.tray_icon.running):
         root.deiconify()

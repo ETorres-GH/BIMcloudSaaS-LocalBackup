@@ -35,13 +35,13 @@ def write_config(tmp_path):
 def test_check_config_ok(tmp_path, capsys):
     config, _ = write_config(tmp_path)
     assert main(["--config", str(config), "check-config"]) == 0
-    assert "Configuração válida" in capsys.readouterr().out
+    assert "Valid configuration" in capsys.readouterr().out
 
 
 def test_check_config_lists_the_source_folders(tmp_path, capsys):
     config, _ = write_config(tmp_path)
     assert main(["--config", str(config), "check-config"]) == 0
-    assert "Pastas:       todo o BIMcloud" in capsys.readouterr().out
+    assert "Folders:      the whole BIMcloud" in capsys.readouterr().out
 
     text = config.read_text(encoding="utf-8").replace(
         "[bimcloud]",
@@ -51,13 +51,13 @@ def test_check_config_lists_the_source_folders(tmp_path, capsys):
     config.write_text(text, encoding="utf-8")
     assert main(["--config", str(config), "check-config"]) == 0
     out = capsys.readouterr().out
-    assert "Pastas:       Obras" in out and "Pastas Exemplo/Projeto Teste" in out
-    assert "Projetos:     Outras/ProjetoA" in out
-    assert "Bibliotecas:  Outras/BibliotecaB" in out
+    assert "Folders:      Obras" in out and "Pastas Exemplo/Projeto Teste" in out
+    assert "Projects:     Outras/ProjetoA" in out
+    assert "Libraries:    Outras/BibliotecaB" in out
     # Every value starts in the same column.
     values = [line[16:] for line in out.splitlines()[1:]]
     assert all(value and not value[0].isspace() for value in values), out
-    assert any(line.startswith("  Servidor:     ") for line in out.splitlines())
+    assert any(line.startswith("  Server:       ") for line in out.splitlines())
 
 
 def test_invalid_config_returns_2(tmp_path, capsys):
@@ -139,7 +139,7 @@ def test_prune_apply_waits_for_no_running_backup(tmp_path, capsys, caplog):
 
     assert old.exists()
     # `_fail` prints, or logs when another test left the file logging on.
-    assert "backup em andamento" in capsys.readouterr().err + caplog.text
+    assert "already running" in capsys.readouterr().err + caplog.text
     assert main(["--config", str(config), "prune", "--apply"]) == 0
     assert not old.exists()
 
@@ -153,7 +153,7 @@ def test_ctrl_c_during_run_exits_130(tmp_path, monkeypatch, capsys, caplog):
     monkeypatch.setattr("bimcloud_backup.cli.service.backup_now", interrupted)
 
     assert main(["--config", str(config), "run"], token_store=MemoryTokenStore()) == 130
-    assert "Backup cancelado" in capsys.readouterr().err
+    assert "Backup cancelled" in capsys.readouterr().err
 
 
 @pytest.fixture
@@ -178,19 +178,19 @@ def outcome(monkeypatch, value):
 @pytest.mark.parametrize(
     ("value", "code", "message"),
     [
-        (AuthError("invalid_grant"), 3, notify.AUTH_EXPIRED),
-        (BimcloudError("Espaço livre abaixo de 10 GB"), 1, notify.FAILED),
-        (requests.ConnectionError("sem rede"), 1, notify.FAILED),
-        (KeyboardInterrupt(), 130, notify.CANCELLED),
-        (BackupCancelled("Backup cancelado."), 1, notify.CANCELLED),
+        (AuthError("invalid_grant"), 3, notify.auth_expired),
+        (BimcloudError("Espaço livre abaixo de 10 GB"), 1, notify.failed),
+        (requests.ConnectionError("sem rede"), 1, notify.failed),
+        (KeyboardInterrupt(), 130, notify.cancelled),
+        (BackupCancelled("Backup cancelado."), 1, notify.cancelled),
     ],
 )
 def test_scheduled_run_notifies_what_went_wrong(scheduled, monkeypatch, value, code, message):
     config, _, shown = scheduled
     outcome(monkeypatch, value)
 
-    assert main(["--config", str(config), "run", "--agendado"]) == code
-    assert shown == [message]
+    assert main(["--config", str(config), "run", "--scheduled"]) == code
+    assert shown == [message()]
 
 
 def test_scheduled_run_notifies_a_disk_error_before_raising_it(scheduled, monkeypatch):
@@ -198,22 +198,22 @@ def test_scheduled_run_notifies_a_disk_error_before_raising_it(scheduled, monkey
     outcome(monkeypatch, OSError("disco cheio"))
 
     with pytest.raises(OSError):
-        main(["--config", str(config), "run", "--agendado"])
-    assert shown == [notify.FAILED]
+        main(["--config", str(config), "run", "--scheduled"])
+    assert shown == [notify.failed()]
 
 
 def test_scheduled_run_with_failed_items_notifies_the_count(scheduled, monkeypatch):
     config, backup_dir, shown = scheduled
     outcome(monkeypatch, BackupResult(folder=backup_dir / "x", errors=["a", "b"]))
 
-    assert main(["--config", str(config), "run", "--agendado"]) == 1
+    assert main(["--config", str(config), "run", "--scheduled"]) == 1
     assert shown == [notify.finished_with_errors(2)]
 
 
 def test_successful_or_manual_runs_do_not_notify(scheduled, monkeypatch):
     config, backup_dir, shown = scheduled
     outcome(monkeypatch, BackupResult(folder=backup_dir / "x"))
-    assert main(["--config", str(config), "run", "--agendado"]) == 0
+    assert main(["--config", str(config), "run", "--scheduled"]) == 0
 
     outcome(monkeypatch, BimcloudError("falhou"))
     assert main(["--config", str(config), "run"]) == 1  # started by hand: the user is watching
@@ -227,7 +227,7 @@ def test_notifications_can_be_turned_off(scheduled, monkeypatch):
     config.write_text(text, encoding="utf-8")
     outcome(monkeypatch, BimcloudError("falhou"))
 
-    assert main(["--config", str(config), "run", "--agendado"]) == 1
+    assert main(["--config", str(config), "run", "--scheduled"]) == 1
     assert shown == []
 
 
@@ -244,7 +244,7 @@ def test_login_prints_the_address_for_another_browser(tmp_path, monkeypatch, cap
     assert main(["--config", str(config), "login"], token_store=MemoryTokenStore()) == 0
     out = capsys.readouterr().out
     assert opened == ["https://example.bimcloud.com/login?state=abc"]
-    assert "outro" in out and "https://example.bimcloud.com/login?state=abc" in out
+    assert "another" in out and "https://example.bimcloud.com/login?state=abc" in out
 
 
 @pytest.fixture
@@ -281,7 +281,7 @@ def test_schedule_install_asks_the_password_only_to_run_logged_off(
     assert "SRV\\backup" in asked[0]
     out = capsys.readouterr().out
     assert "senha" not in out
-    assert "mesmo sem ninguém conectado" in out
+    assert "even with nobody signed in" in out
 
 
 class FakeKernel32:
@@ -342,7 +342,7 @@ def test_scheduled_runs_never_look_for_a_console(tmp_path, monkeypatch):
     attached = []
     monkeypatch.setattr("bimcloud_backup.cli.attach_parent_console", lambda: attached.append(1))
     monkeypatch.setattr("bimcloud_backup.cli._run", lambda *a, **k: 0)
-    main(["--config", str(config), "run", "--agendado"])
+    main(["--config", str(config), "run", "--scheduled"])
     assert attached == []
     main(["--config", str(config), "check-config"])
     assert attached == [1]
@@ -353,4 +353,35 @@ def test_schedule_status_shows_the_mode(tmp_path, capsys, task):
     assert main(["--config", str(config), "schedule", "status"]) == 0
     out = capsys.readouterr().out
     assert "03/10/2026 23:00:00" in out
-    assert "mesmo sem ninguém conectado" in out
+    assert "even with nobody signed in" in out
+
+
+def test_the_command_line_speaks_the_saved_language(tmp_path, capsys):
+    config, _ = write_config(tmp_path)
+    assert main(["--config", str(config), "check-config"]) == 0
+    assert "Valid configuration" in capsys.readouterr().out
+
+    config.write_text(
+        config.read_text(encoding="utf-8") + '\n[interface]\nlanguage = "pt-BR"\n',
+        encoding="utf-8",
+    )
+    assert main(["--config", str(config), "check-config"]) == 0
+    assert "Configuração válida" in capsys.readouterr().out
+
+
+def test_the_options_of_earlier_versions_still_work(tmp_path, monkeypatch):
+    # Scheduled tasks and the Run key created by earlier versions use the old names.
+    config, _ = write_config(tmp_path)
+    runs = []
+    monkeypatch.setattr("bimcloud_backup.cli._run", lambda *a, **k: runs.append(k) or 0)
+    assert main(["--config", str(config), "run", "--agendado"]) == 0
+    assert main(["--config", str(config), "run", "--scheduled"]) == 0
+    assert runs == [{"scheduled": True}, {"scheduled": True}]
+
+    opened = []
+    monkeypatch.setattr(
+        "bimcloud_backup.gui.run_gui", lambda path, store, tray_only: opened.append(tray_only) or 0
+    )
+    assert main(["gui", "--bandeja"]) == 0
+    assert main(["gui", "--tray"]) == 0
+    assert opened == [True, True]

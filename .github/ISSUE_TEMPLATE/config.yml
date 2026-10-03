@@ -1,5 +1,5 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Reportar vulnerabilidade de segurança
-    url: https://docs.github.com/pt/code-security/security-advisories/guidance-on-reporting-and-writing-information-about-vulnerabilities/privately-reporting-a-security-vulnerability
-    about: Não abra issue pública. Use a aba Security → Report a vulnerability.
+  - name: Report a security vulnerability / Reportar vulnerabilidade
+    url: https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing-information-about-vulnerabilities/privately-reporting-a-security-vulnerability
+    about: Do not open a public issue. Use Security → Report a vulnerability. / Não abra issue pública.

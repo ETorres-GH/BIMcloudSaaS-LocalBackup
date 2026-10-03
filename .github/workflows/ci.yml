@@ -27,7 +27,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Preparar validador da base
+      - name: Prepare the validator of the base
         run: |
           if git cat-file -e "$BASE_SHA:scripts/check_pr.py" 2>/dev/null; then
             git show "$BASE_SHA:scripts/check_pr.py" > "$RUNNER_TEMP/check_pr.py"
@@ -35,10 +35,10 @@ jobs:
             cp scripts/check_pr.py "$RUNNER_TEMP/check_pr.py"
           fi
 
-      - name: Validar regras do projeto
+      - name: Validate the project rules
         run: python "$RUNNER_TEMP/check_pr.py" --base "$BASE_SHA" --head "$HEAD_SHA"
 
-      - name: Instalar Gitleaks com checksum verificado
+      - name: Install Gitleaks with a verified checksum
         env:
           GITLEAKS_VERSION: 8.30.1
           GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
@@ -49,11 +49,12 @@ jobs:
           echo "${GITLEAKS_SHA256}  gitleaks.tar.gz" | sha256sum --check --strict
           tar -xzf gitleaks.tar.gz gitleaks
 
-      - name: Procurar segredos no diff
+      - name: Look for secrets in the diff
         run: git diff "$BASE_SHA...$HEAD_SHA" | ./gitleaks --redact --no-banner stdin
 
-  # windows-latest é o Windows Server 2025; o Server 2022 roda com o Python mínimo. Os nomes
-  # "test (Python X)" são as verificações obrigatórias do main: não mudar.
+  # windows-latest is Windows Server 2025; Server 2022 runs with the minimum Python. The names
+  # "test (Python X)", "regras do PR" and "instalador (Inno Setup)" are the required checks of
+  # main: do not change them.
   test:
     name: >-
       ${{ matrix.os == 'windows-latest'
@@ -77,30 +78,30 @@ jobs:
           cache: pip
           cache-dependency-path: requirements-ci.txt
 
-      - name: Atualizar o pip
+      - name: Upgrade pip
         run: python -m pip install --upgrade --require-hashes -r requirements-pip.txt
 
-      - name: Instalar dependências conferidas
+      - name: Install checked dependencies
         run: python -m pip install --require-hashes -r requirements-ci.txt
 
-      - name: Instalar o programa
+      - name: Install the program
         run: python -m pip install --no-deps --no-build-isolation -e .
 
-      - name: Auditar dependências de CI
+      - name: Audit CI dependencies
         if: matrix.python-version == '3.13'
         run: python -m pip_audit --strict --require-hashes -r requirements-ci.txt
 
-      - name: Auditar dependências de build
+      - name: Audit build dependencies
         if: matrix.python-version == '3.13'
         run: python -m pip_audit --strict --require-hashes -r requirements-build.txt
 
       - name: Lint
         run: ruff check .
 
-      - name: Formatação
+      - name: Formatting
         run: ruff format --check .
 
-      - name: Testes
+      - name: Tests
         run: pytest
 
   instalador:
@@ -111,14 +112,14 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Instalar o Inno Setup (versão fixa, SHA-256 e assinatura conferidos)
+      - name: Install Inno Setup (pinned version, SHA-256 and signature checked)
         run: .\scripts\install_inno.ps1
 
-      # Confere só o script do instalador: um executável qualquer do Windows faz o papel do
-      # programa, que é gerado de verdade apenas na Release.
-      - name: Compilar o instalador com um executável de teste
+      # Checks only the installer script: any Windows executable plays the part of the program,
+      # which is really built only in the release.
+      - name: Build the installer with a test executable
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
           Copy-Item "$env:SystemRoot\System32\whoami.exe" dist\BIMcloudBackup.exe
           .\scripts\build_installer.ps1 -Required
-          if (-not (Test-Path dist\BIMcloudBackup-Setup.exe)) { throw "Instalador não gerado" }
+          if (-not (Test-Path dist\BIMcloudBackup-Setup.exe)) { throw "Installer not built" }

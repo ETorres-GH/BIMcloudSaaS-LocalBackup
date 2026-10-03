@@ -65,3 +65,20 @@ def test_inno_setup_download_is_pinned_and_verified():
     assert re.search(r'^\$Version = "\d+\.\d+\.\d+"$', script, re.MULTILINE)
     assert re.search(r'^\$Sha256 = "[0-9a-f]{64}"$', script, re.MULTILINE)
     assert "Get-AuthenticodeSignature" in script
+
+
+def test_asks_the_language_first_with_english_selected():
+    assert setting("ShowLanguageDialog") == "yes"
+    assert setting("LanguageDetectionMethod") == "none"
+    languages = re.findall(r'^Name: "(\w+)"; MessagesFile:', ISS, re.MULTILINE)
+    assert languages == ["en", "ptbr"]
+    assert "en.ProgramLanguage=en" in ISS and "ptbr.ProgramLanguage=pt-BR" in ISS
+
+
+def test_a_new_installation_opens_in_the_chosen_language():
+    code = ISS[
+        ISS.index("procedure CurStepChanged") : ISS.index("procedure CurUninstallStepChanged")
+    ]
+    # Only when there is no configuration yet: an update never touches it.
+    assert "if not FileExists(Config) then" in code
+    assert "'[interface]'" in code and "CustomMessage('ProgramLanguage')" in code

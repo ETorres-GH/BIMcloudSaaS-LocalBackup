@@ -1,1 +1,0 @@
-- Andamento do backup na janela: projetos, bibliotecas e arquivos copiados.

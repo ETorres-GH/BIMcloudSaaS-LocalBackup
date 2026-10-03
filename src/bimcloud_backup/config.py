@@ -11,6 +11,8 @@ from typing import Any
 
 import tomli_w
 
+from bimcloud_backup.i18n import DEFAULT_LANGUAGE, LANGUAGES, t
+
 DEFAULT_CLIENT_ID = "bimcloud-localbackup"
 
 VERSIONING_HISTORY = "history"
@@ -30,12 +32,13 @@ UNIT_DAYS = "days"
 # Limits of the Windows Task Scheduler: /SC MINUTE, HOURLY and DAILY with /MO.
 UNIT_LIMITS = {UNIT_MINUTES: 1439, UNIT_HOURS: 23, UNIT_DAYS: 365}
 UNITS = tuple(UNIT_LIMITS)
-# Singular and plural, as the window shows them.
-UNIT_NAMES = {
-    UNIT_MINUTES: ("minuto", "minutos"),
-    UNIT_HOURS: ("hora", "horas"),
-    UNIT_DAYS: ("dia", "dias"),
-}
+
+
+def unit_names(unit: str) -> tuple[str, str]:
+    """Singular and plural of a unit, as the window shows them."""
+    return t(f"unit.{unit}.one"), t(f"unit.{unit}.other")
+
+
 # How earlier versions stored it (`mode` with `interval_minutes`); still read, never written.
 SCHEDULE_DAILY = "daily"
 SCHEDULE_INTERVAL = "interval"
@@ -83,6 +86,9 @@ DEFAULTS: dict[str, dict[str, Any]] = {
     "logging": {
         "verbose": False,
     },
+    "interface": {
+        "language": DEFAULT_LANGUAGE,
+    },
 }
 
 
@@ -124,6 +130,8 @@ class Config:
     # Task runs even with nobody logged in (servers); needs the Windows password once.
     run_logged_off: bool = False
     verbose_logging: bool = False
+    # Language of the window, the messages and the log: "en" or "pt-BR".
+    language: str = DEFAULT_LANGUAGE
 
     @property
     def selection(self) -> Selection:
@@ -139,9 +147,9 @@ def load_raw(path: Path) -> dict[str, Any]:
         with path.open("rb") as f:
             return tomllib.load(f)
     except FileNotFoundError as e:
-        raise ConfigError(f"Arquivo de configuração não encontrado: {path}") from e
+        raise ConfigError(t("config.not_found", path=path)) from e
     except tomllib.TOMLDecodeError as e:
-        raise ConfigError(f"TOML inválido em {path}: {e}") from e
+        raise ConfigError(t("config.invalid_toml", path=path, error=e)) from e
 
 
 def load_config(path: Path) -> Config:
@@ -149,9 +157,34 @@ def load_config(path: Path) -> Config:
 
 
 def save_config(config: Config, path: Path) -> None:
+    _write_raw(to_raw(config), path)
+
+
+def saved_language(path: Path) -> str | None:
+    """The language chosen in config.toml; None when none was chosen yet (or it is unreadable)."""
+    try:
+        interface = load_raw(path).get("interface")
+    except (ConfigError, OSError):
+        return None
+    language = interface.get("language") if isinstance(interface, dict) else None
+    return language if language in LANGUAGES else None
+
+
+def save_language(language: str, path: Path) -> None:
+    """Save only the language, keeping everything else in the file as it is.
+
+    Raises ConfigError when the file exists but cannot be read, so it is never overwritten.
+    """
+    raw = load_raw(path) if path.exists() else {}
+    interface = raw.get("interface")
+    raw["interface"] = {**(interface if isinstance(interface, dict) else {}), "language": language}
+    _write_raw(raw, path)
+
+
+def _write_raw(raw: dict[str, Any], path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")
-    tmp.write_text(tomli_w.dumps(to_raw(config)), encoding="utf-8")
+    tmp.write_text(tomli_w.dumps(raw), encoding="utf-8")
     tmp.replace(path)
 
 
@@ -189,6 +222,7 @@ def to_raw(config: Config) -> dict[str, dict[str, Any]]:
             "run_logged_off": config.run_logged_off,
         },
         "logging": {"verbose": config.verbose_logging},
+        "interface": {"language": config.language},
     }
 
 
@@ -197,15 +231,16 @@ def parse_config(raw: dict[str, Any]) -> Config:
     backup = _section(raw, "backup", required=True)
     schedule = _section(raw, "schedule")
     logging_ = _section(raw, "logging")
+    interface = _section(raw, "interface")
     d = DEFAULTS
 
     server_url = _require(bimcloud, "bimcloud", "server_url", str).strip()
     if not server_url.startswith("https://") or len(server_url) <= len("https://"):
-        raise ConfigError("bimcloud.server_url deve começar com https://")
+        raise ConfigError(t("config.server_url_https"))
 
     directory = _require(backup, "backup", "directory", str).strip()
     if not directory:
-        raise ConfigError("backup.directory não pode ficar vazio")
+        raise ConfigError(t("config.directory_empty"))
 
     versioning = _choice(backup, "backup", "versioning", VERSIONING_MODES)
     retention_days = _optional(backup, "backup", "retention_days", int, d)
@@ -220,11 +255,21 @@ def parse_config(raw: dict[str, Any]) -> Config:
     stall = _optional(backup, "backup", "export_stall_minutes", int, d)
     if not 1 <= stall <= MAX_EXPORT_STALL_MINUTES:
         raise ConfigError(
-            f"backup.export_stall_minutes deve estar entre 1 e {MAX_EXPORT_STALL_MINUTES}"
+            t(
+                "config.between",
+                name="backup.export_stall_minutes",
+                low=1,
+                high=MAX_EXPORT_STALL_MINUTES,
+            )
         )
     if not 1 <= parallel <= MAX_PARALLEL_DOWNLOADS:
         raise ConfigError(
-            f"backup.parallel_downloads deve estar entre 1 e {MAX_PARALLEL_DOWNLOADS}"
+            t(
+                "config.between",
+                name="backup.parallel_downloads",
+                low=1,
+                high=MAX_PARALLEL_DOWNLOADS,
+            )
         )
 
     every, unit = schedule_from(schedule)
@@ -261,6 +306,7 @@ def parse_config(raw: dict[str, Any]) -> Config:
         notify_failures=_optional(schedule, "schedule", "notify_failures", bool, d),
         run_logged_off=_optional(schedule, "schedule", "run_logged_off", bool, d),
         verbose_logging=_optional(logging_, "logging", "verbose", bool, d),
+        language=_choice(interface, "interface", "language", tuple(LANGUAGES)),
     )
 
 
@@ -282,12 +328,16 @@ def schedule_from(schedule: dict[str, Any]) -> tuple[int, str]:
 def _old_schedule(schedule: dict[str, Any]) -> tuple[int, str]:
     mode = _check_type(schedule.get("mode", SCHEDULE_DAILY), "schedule", "mode", str)
     if mode not in SCHEDULE_MODES:
-        raise ConfigError(f"schedule.mode deve ser um de: {', '.join(SCHEDULE_MODES)}")
+        raise ConfigError(
+            t("config.one_of", name="schedule.mode", options=", ".join(SCHEDULE_MODES))
+        )
     if mode == SCHEDULE_DAILY:
         return 1, UNIT_DAYS
     minutes = _check_type(schedule.get("interval_minutes", 60), "schedule", "interval_minutes", int)
     if not 1 <= minutes <= MAX_INTERVAL_MINUTES:
-        raise ConfigError(f"schedule.interval_minutes deve estar entre 1 e {MAX_INTERVAL_MINUTES}")
+        raise ConfigError(
+            t("config.between", name="schedule.interval_minutes", low=1, high=MAX_INTERVAL_MINUTES)
+        )
     return natural_interval(minutes)
 
 
@@ -301,7 +351,7 @@ def natural_interval(minutes: int) -> tuple[int, str]:
 def check_interval(every: int, unit: str, label: str) -> None:
     limit = UNIT_LIMITS[unit]
     if not 1 <= every <= limit:
-        raise ConfigError(f"{label}: em {UNIT_NAMES[unit][1]}, deve estar entre 1 e {limit}")
+        raise ConfigError(t("config.interval", label=label, unit=unit_names(unit)[1], high=limit))
 
 
 def source_folders_from(bimcloud: dict[str, Any]) -> tuple[str, ...]:
@@ -313,7 +363,7 @@ def source_folders_from(bimcloud: dict[str, Any]) -> tuple[str, ...]:
     if "source_folders" in bimcloud:
         folders = _check_type(bimcloud["source_folders"], "bimcloud", "source_folders", list)
         if not all(isinstance(f, str) for f in folders):
-            raise ConfigError("bimcloud.source_folders deve ser uma lista de textos")
+            raise ConfigError(t("config.text_list", name="bimcloud.source_folders"))
     else:
         old = _check_type(bimcloud.get("source_folder", ""), "bimcloud", "source_folder", str)
         folders = [old]
@@ -339,7 +389,7 @@ def selection_from(bimcloud: dict[str, Any]) -> Selection:
     for key in ("source_projects", "source_libraries"):
         paths = _check_type(bimcloud.get(key, []), "bimcloud", key, list)
         if not all(isinstance(path, str) for path in paths):
-            raise ConfigError(f"bimcloud.{key} deve ser uma lista de textos")
+            raise ConfigError(t("config.text_list", name=f"bimcloud.{key}"))
         items.append(paths)
     return normalize_selection(source_folders_from(bimcloud), *items)
 
@@ -380,13 +430,13 @@ def _section(raw: dict[str, Any], name: str, required: bool = False) -> dict[str
     if section is None and not required:
         return {}
     if not isinstance(section, dict):
-        raise ConfigError(f"Seção [{name}] ausente na configuração")
+        raise ConfigError(t("config.missing_section", name=name))
     return section
 
 
 def _require(section: dict[str, Any], prefix: str, key: str, kind: type | tuple) -> Any:
     if key not in section:
-        raise ConfigError(f"{prefix}.{key} é obrigatório")
+        raise ConfigError(t("config.required", name=f"{prefix}.{key}"))
     return _check_type(section[key], prefix, key, kind)
 
 
@@ -401,7 +451,7 @@ def _optional(
 def _choice(section: dict[str, Any], prefix: str, key: str, options: tuple[str, ...]) -> str:
     value = _optional(section, prefix, key, str, DEFAULTS)
     if value not in options:
-        raise ConfigError(f"{prefix}.{key} deve ser um de: {', '.join(options)}")
+        raise ConfigError(t("config.one_of", name=f"{prefix}.{key}", options=", ".join(options)))
     return value
 
 
@@ -409,20 +459,18 @@ def _check_type(value: Any, prefix: str, key: str, kind: type | tuple) -> Any:
     kinds = kind if isinstance(kind, tuple) else (kind,)
     # bool is a subclass of int, so reject it explicitly for numeric fields.
     if not isinstance(value, kinds) or (bool not in kinds and isinstance(value, bool)):
-        names = " ou ".join(k.__name__ for k in kinds)
-        raise ConfigError(f"{prefix}.{key} deve ser do tipo {names}")
+        names = t("config.or").join(k.__name__ for k in kinds)
+        raise ConfigError(t("config.type", name=f"{prefix}.{key}", types=names))
     return value
 
 
 def _at_least(value: float, minimum: float, name: str) -> None:
     if value < minimum:
-        raise ConfigError(f"{name} deve ser pelo menos {minimum}")
+        raise ConfigError(t("config.at_least", name=name, minimum=minimum))
 
 
 def _parse_time(value: str) -> time:
     try:
         return datetime.strptime(value.strip(), "%H:%M").time()
     except ValueError as e:
-        raise ConfigError(
-            f'schedule.run_at deve estar no formato "HH:MM", recebido "{value}"'
-        ) from e
+        raise ConfigError(t("config.run_at", value=value)) from e

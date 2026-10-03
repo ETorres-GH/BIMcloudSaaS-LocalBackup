@@ -1,5 +1,7 @@
 # Guia do usuário
 
+[English](GUIDE.md) | Português (Brasil)
+
 Como usar o BIMcloud Backup Local para guardar no seu computador uma cópia do que está no
 BIMcloud SaaS do escritório.
 
@@ -22,7 +24,7 @@ BIMcloud SaaS do escritório.
 13. [Antes de pedir ajuda: anonimize](#13-antes-de-pedir-ajuda-anonimize)
 14. [Usar num servidor](#14-usar-num-servidor)
 
-![Janela principal do BIMcloud Backup Local](images/guia-janela.png)
+![Janela principal do BIMcloud Backup Local](images/window.pt-BR.png)
 
 À esquerda ficam a situação dos backups: o último, o próximo, o espaço livre, o botão **Fazer
 backup agora**, os **Backups guardados** e a **Atividade**. À direita ficam os ajustes, em passos
@@ -62,6 +64,15 @@ a configuração, os logs e o login guardado. As pastas de backup nunca são apa
 
 Guarde o `BIMcloudBackup.exe` numa pasta fixa, por exemplo `C:\Programas\BIMcloudBackup`. Se você
 mover ou apagar o arquivo depois de ligar o backup automático, ele para de funcionar.
+
+### Idioma
+
+Na primeira vez, o programa pergunta o idioma, com **English** já marcado: escolha
+**Português (Brasil)** e clique em **Continuar**. Para trocar depois, clique no idioma no canto
+superior direito da janela; a janela muda na hora. Os avisos do Windows e o log seguem o mesmo
+idioma.
+
+![Escolha do idioma](images/language.png)
 
 ## 2. O aviso do Windows ao abrir
 
@@ -107,7 +118,7 @@ marcado, o BIMcloud inteiro é copiado.
    marcado dentro.
 4. Clique em **Usar esta seleção** (ou **Limpar** para copiar tudo) e em **Salvar alterações**.
 
-![Janela Escolher o que copiar do BIMcloud](images/guia-pastas.png)
+![Janela Escolher o que copiar do BIMcloud](images/folders.pt-BR.png)
 
 No backup, cada item fica com o mesmo caminho que tem no BIMcloud. Um projeto marcado só é
 copiado com **Projetos** ligado, e uma biblioteca, com **Bibliotecas** ligado.
@@ -144,7 +155,7 @@ gravados.
 **Opções avançadas** (embaixo do passo 5, ou no botão **Opções avançadas...** numa janela mais
 baixa):
 
-![Opções avançadas abertas](images/guia-avancadas.png)
+![Opções avançadas abertas](images/advanced.pt-BR.png)
 
 - **Parar o backup depois de _X_ horas** ou **se o disco ficar com menos de _Y_ GB livres**
   (`0` = sem limite).
@@ -162,7 +173,7 @@ No passo **5. Backup automático**:
    também o horário em **às**. "A cada 1 dia às 23:00" é todo dia às 23:00.
 3. Clique em **Salvar alterações**.
 
-![Intervalo do backup automático com a lista de unidades aberta](images/guia-horario.png)
+![Intervalo do backup automático com a lista de unidades aberta](images/schedule.pt-BR.png)
 
 O quadro da esquerda passa a mostrar "Próximo backup ...".
 
@@ -206,7 +217,7 @@ D:\Backups-BIMcloud\
 > Para trabalhar num arquivo, copie-o para outra pasta antes de abrir. Apagar uma pasta de backup
 > inteira é seguro.
 
-Uma pasta `.incompleto-<data>` é de um backup interrompido e é apagada no backup seguinte.
+Uma pasta `.incomplete-<data>` é de um backup interrompido e é apagada no backup seguinte.
 
 A lista **Backups guardados** mostra cada backup com data, tamanho e situação: **Concluído**,
 **Com avisos (N)** (_N_ itens falharam), **Incompleto** ou **Sem detalhes** (o resumo do backup
@@ -329,6 +340,8 @@ No **Prompt de Comando**, na conta que vai fazer os backups:
 
    O `login` mostra um endereço para abrir em qualquer navegador. O `schedule install` pede a
    senha do Windows; `schedule status` mostra como ficou.
+
+A linha de comando usa o `language` do `config.toml` (`"en"` ou `"pt-BR"`).
 
 ---
 

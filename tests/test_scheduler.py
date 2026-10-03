@@ -69,7 +69,7 @@ def test_start_time_is_the_next_multiple_of_the_interval(unit, every, now, expec
 def test_backup_command_from_source_uses_module(monkeypatch):
     monkeypatch.delattr("sys.frozen", raising=False)
     cmd = scheduler.backup_command(Path("cfg.toml"))
-    assert cmd[1:] == ["-m", "bimcloud_backup", "--config", "cfg.toml", "run", "--agendado"]
+    assert cmd[1:] == ["-m", "bimcloud_backup", "--config", "cfg.toml", "run", "--scheduled"]
 
 
 def test_backup_command_from_executable(monkeypatch):
@@ -80,13 +80,13 @@ def test_backup_command_from_executable(monkeypatch):
         "--config",
         "cfg.toml",
         "run",
-        "--agendado",
+        "--scheduled",
     ]
 
 
 def test_the_scheduled_task_marks_its_runs():
     cmd = scheduler.create_command(CONFIG, scheduler.backup_command(Path("cfg.toml")))
-    assert cmd[cmd.index("/TR") + 1].endswith("run --agendado")
+    assert cmd[cmd.index("/TR") + 1].endswith("run --scheduled")
 
 
 SECRET = "s3nh@ çã"

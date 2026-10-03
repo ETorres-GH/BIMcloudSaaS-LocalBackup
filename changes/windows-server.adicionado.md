@@ -1,3 +1,0 @@
-- Backup automático mesmo sem ninguém conectado no Windows, para servidores.
-- Endereço do login que pode ser aberto em outro navegador ou computador.
-- Uso no Windows Server Core pelo Prompt de Comando.

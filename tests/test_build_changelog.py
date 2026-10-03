@@ -18,13 +18,13 @@ Introdução.
 
 ## [Unreleased]
 
-### Adicionado
+### Added
 
 - Item que já estava no Unreleased.
 
 ## [0.1.0] - 2026-09-01
 
-### Adicionado
+### Added
 
 - Primeira versão.
 """
@@ -35,19 +35,19 @@ def test_builds_release_notes_and_consumes_fragments(tmp_path):
     changelog.write_text(changelog_text(), encoding="utf-8")
     changes = tmp_path / "changes"
     changes.mkdir()
-    first = changes / "12.adicionado.md"
+    first = changes / "12.added.md"
     first.write_text("- Item vindo do fragmento.\n", encoding="utf-8")
-    second = changes / "corrigir-login.corrigido.md"
+    second = changes / "corrigir-login.fixed.md"
     second.write_text("- Login corrigido.\n", encoding="utf-8")
     output = tmp_path / "release-notes.md"
 
     notes = build_changelog.build_changelog("0.2.0", "2026-09-28", changelog, changes, output)
 
     assert notes == (
-        "### Adicionado\n\n"
+        "### Added\n\n"
         "- Item que já estava no Unreleased.\n"
         "- Item vindo do fragmento.\n\n"
-        "### Corrigido\n\n"
+        "### Fixed\n\n"
         "- Login corrigido."
     )
     text = changelog.read_text(encoding="utf-8")
@@ -87,7 +87,7 @@ def test_existing_release_rejects_remaining_fragment_without_changing_files(tmp_
 
     with pytest.raises(
         build_changelog.ChangelogError,
-        match="Prepare uma nova versão ou apague os fragmentos",
+        match="Prepare a new version or delete the fragments",
     ):
         build_changelog.build_changelog("0.2.0", "2026-09-29", changelog, changes, output)
 
@@ -106,7 +106,7 @@ def test_rejects_invalid_fragment_name_without_changing_files(tmp_path, name):
     fragment = changes / name
     fragment.write_text("- Texto.\n", encoding="utf-8")
 
-    with pytest.raises(build_changelog.ChangelogError, match="Fragmento inválido"):
+    with pytest.raises(build_changelog.ChangelogError, match="Invalid fragment"):
         build_changelog.build_changelog("0.2.0", "2026-09-28", changelog, changes)
 
     assert changelog.read_text(encoding="utf-8") == original
@@ -120,11 +120,11 @@ def test_rejects_fragment_without_markdown_item(tmp_path):
     changes.mkdir()
     (changes / "x.docs.md").write_text("Texto sem marcador.\n", encoding="utf-8")
 
-    with pytest.raises(build_changelog.ChangelogError, match="deve começar"):
+    with pytest.raises(build_changelog.ChangelogError, match="must start"):
         build_changelog.build_changelog("0.2.0", "2026-09-28", changelog, changes)
 
 
-def test_accepts_security_without_cedilla(tmp_path):
+def test_accepts_the_portuguese_types_of_earlier_fragments(tmp_path):
     changelog = tmp_path / "CHANGELOG.md"
     changelog.write_text(changelog_text(), encoding="utf-8")
     changes = tmp_path / "changes"
@@ -134,7 +134,7 @@ def test_accepts_security_without_cedilla(tmp_path):
 
     notes = build_changelog.build_changelog("0.2.0", "2026-09-28", changelog, changes)
 
-    assert "### Segurança\n\n- Validação reforçada." in notes
+    assert "### Security\n\n- Validação reforçada." in notes
     assert not fragment.exists()
 
 
@@ -169,7 +169,7 @@ def test_parse_version(tag):
 
 def test_main_reports_invalid_version(capsys):
     assert build_changelog.main(["versão"]) == 1
-    assert "Versão inválida" in capsys.readouterr().err
+    assert "Invalid version" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("value", ["28/09/2026", "2026-9-28", "2026-02-30"])
@@ -178,7 +178,7 @@ def test_rejects_invalid_release_date_without_changing_files(tmp_path, value):
     original = changelog_text()
     changelog.write_text(original, encoding="utf-8")
 
-    with pytest.raises(build_changelog.ChangelogError, match="Data inválida"):
+    with pytest.raises(build_changelog.ChangelogError, match="Invalid date"):
         build_changelog.build_changelog("0.2.0", value, changelog, tmp_path / "changes")
 
     assert changelog.read_text(encoding="utf-8") == original

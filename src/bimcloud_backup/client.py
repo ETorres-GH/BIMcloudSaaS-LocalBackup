@@ -18,6 +18,7 @@ from bimcloud_backup.errors import (
     raise_for_response,
     refuse_redirect,
 )
+from bimcloud_backup.i18n import t
 from bimcloud_backup.urls import https_origin
 
 API_ROOT = "management/client"
@@ -122,7 +123,7 @@ class ManagerClient:
                 json=criterion,
             )
             if not isinstance(page, list):
-                raise ApiError("O BIMcloud respondeu à listagem num formato inesperado")
+                raise ApiError(t("client.unexpected_listing"))
             found.extend(page)
             if len(page) < self._page_size:
                 return found
@@ -157,7 +158,7 @@ class ManagerClient:
         exactly as given: the access token is never added to them.
         """
         if not url.lower().startswith("https://"):
-            raise BimcloudError("Download recusado: o endereço não usa https")
+            raise BimcloudError(t("download.not_https"))
 
         def send() -> requests.Response:
             return self._session.get(
@@ -197,34 +198,23 @@ class ManagerClient:
             location = response.headers.get("Location", "")
             response.close()
             if not location:
-                raise BimcloudError(
-                    "O servidor redirecionou o download para um endereço sem https; recusado"
-                )
+                raise BimcloudError(t("download.redirect_not_https"))
             target = _redirect_target(urljoin(response.url or url, location))
             host = urlsplit(target).hostname or "?"
             if not trusted(target):
-                raise BimcloudError(
-                    f"O servidor redirecionou o download para {host}, que não pertence ao "
-                    "BIMcloud; recusado"
-                )
+                raise BimcloudError(t("download.redirect_untrusted", host=host))
             if _same_ascii_origin(target, self._server_url):
                 # The BIMcloud server itself: download-backup needs the login here, and only
                 # one method at a time, so the Authorization header goes alone.
-                log.info(
-                    "Download redirecionado para %s (o próprio servidor; acesso enviado no "
-                    "cabeçalho Authorization)",
-                    host,
-                )
+                log.info(t("download.redirected_to_server", host=host))
                 response = self._get_on_the_server(target, timeout)
             else:
                 # Only the host: the query of a download address may carry a ticket.
-                log.info("Download redirecionado para %s", host)
+                log.info(t("download.redirected", host=host))
                 response = self._get_without_credentials(target, timeout)
         if 300 <= response.status_code < 400:
             response.close()
-            raise BimcloudError(
-                f"O download foi redirecionado mais de {MAX_DOWNLOAD_REDIRECTS} vezes; recusado"
-            )
+            raise BimcloudError(t("download.too_many_redirects", count=MAX_DOWNLOAD_REDIRECTS))
         return response
 
     def _get_on_the_server(self, url: str, timeout: Any) -> requests.Response:
@@ -338,13 +328,9 @@ def _redirect_target(url: str) -> str:
     """
     parts = urlsplit(url)
     if parts.scheme.lower() != "https" or not parts.hostname:
-        raise BimcloudError(
-            "O servidor redirecionou o download para um endereço sem https; recusado"
-        )
+        raise BimcloudError(t("download.redirect_not_https"))
     if parts.username is not None or parts.password is not None:
-        raise BimcloudError(
-            "O servidor redirecionou o download para um endereço com usuário e senha; recusado"
-        )
+        raise BimcloudError(t("download.redirect_credentials"))
     query = [
         (key, value)
         for key, value in parse_qsl(parts.query, keep_blank_values=True)

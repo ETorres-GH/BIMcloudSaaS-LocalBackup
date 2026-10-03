@@ -1,12 +1,13 @@
-# Segurança
+# Security
 
-Enquanto o projeto estiver na versão `0.x`, só a versão mais recente recebe correções.
+While the project is at version `0.x`, only the latest version gets fixes.
 
-Para reportar uma vulnerabilidade, não abra uma issue pública: use **Security** → **Report a
-vulnerability**, com a descrição, os passos para reproduzir e o impacto. Respondo em até 7 dias.
+To report a vulnerability, do not open a public issue: use **Security** → **Report a
+vulnerability**, with the description, the steps to reproduce it and the impact. You can write in
+English or Portuguese. I answer within 7 days.
 
-Antes de enviar logs, troque os nomes de projetos, pastas e clientes por genéricos (ex.:
-`ProjetoA`, `ClienteC`) e não anexe arquivos `.pln`, `.BIMProject` ou `.BIMLibrary`.
+Before sending logs, replace the names of projects, folders and clients with generic ones (e.g.
+`ProjectA`, `ClientC`) and do not attach `.pln`, `.BIMProject` or `.BIMLibrary` files.
 
-A senha do BIMcloud nunca passa pelo programa. O login fica no Gerenciador de Credenciais do
-Windows e pode ser apagado pelo desinstalador ou com `BIMcloudBackup.exe logout`.
+The BIMcloud password never goes through the program. The sign-in is kept in the Windows
+Credential Manager and can be deleted by the uninstaller or with `BIMcloudBackup.exe logout`.

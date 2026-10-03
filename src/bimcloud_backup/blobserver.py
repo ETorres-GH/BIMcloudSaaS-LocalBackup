@@ -15,6 +15,7 @@ import requests
 
 from bimcloud_backup.client import ManagerClient
 from bimcloud_backup.errors import ApiError, BimcloudError, raise_for_response, refuse_redirect
+from bimcloud_backup.i18n import t
 from bimcloud_backup.redaction import redact
 from bimcloud_backup.urls import https_origin
 
@@ -68,7 +69,7 @@ class BlobDownloader:
         """
         server_id = blob.get("modelServerId")
         if not server_id:
-            raise BimcloudError(f"O arquivo {blob.get('$path')} não informa o servidor")
+            raise BimcloudError(t("download.no_server", path=blob.get("$path")))
         for attempt in range(1, RETRY_ATTEMPTS + 1):
             try:
                 return self._fetch_in_session(server_id, blob, target, check)
@@ -85,10 +86,12 @@ class BlobDownloader:
                 raise error
             wait = RETRY_WAIT_SECONDS * 2 ** (attempt - 1)
             log.warning(
-                "Falha temporária ao baixar %s (%s); nova tentativa em %.0f s",
-                blob.get("$path"),
-                redact(str(error)),
-                wait,
+                t(
+                    "download.retry",
+                    path=blob.get("$path"),
+                    error=redact(str(error)),
+                    seconds=f"{wait:.0f}",
+                )
             )
             # A cancel or a time limit must not wait for the retries.
             check()
@@ -135,7 +138,12 @@ class BlobDownloader:
             expected = blob.get("$size")
             if isinstance(expected, int) and expected != written:
                 raise TransientDownloadError(
-                    f"Download incompleto de {blob.get('$path')}: {written} de {expected} bytes"
+                    t(
+                        "download.incomplete_file",
+                        name=blob.get("$path"),
+                        written=written,
+                        total=expected,
+                    )
                 )
             partial.replace(target)
         except BaseException:
@@ -220,7 +228,7 @@ class BlobDownloader:
                 continue
             if response.ok and not response.is_redirect and response.status_code < 300:
                 return url
-        raise BimcloudError(f"O servidor {server.get('name', '?')} não está acessível por https")
+        raise BimcloudError(t("download.server_unreachable", name=server.get("name", "?")))
 
 
 def candidate_urls(server: dict[str, Any], scheme: str, hostname: str) -> list[str]:

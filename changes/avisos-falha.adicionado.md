@@ -1,1 +1,0 @@
-- Aviso do Windows quando um backup automático precisa de atenção.

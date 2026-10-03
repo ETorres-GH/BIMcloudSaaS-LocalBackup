@@ -1,1 +1,0 @@
-- O horário e o intervalo do backup automático são escolhidos em listas.

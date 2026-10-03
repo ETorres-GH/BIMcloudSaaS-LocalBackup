@@ -51,7 +51,7 @@ def test_allows_generated_with_as_regular_prose():
 def test_commit_signoff_must_match_author():
     message = "feat: mudança\n\nSigned-off-by: Outra Pessoa <outra@example.invalid>"
     findings = check_pr.check_commit("abc123", message, "Ettore Torres", "ettoretorres@hotmail.com")
-    assert any("não corresponde ao autor" in finding.message for finding in findings)
+    assert any("does not match the commit author" in finding.message for finding in findings)
 
 
 def test_commit_accepts_dependabot_signoff_email():
@@ -92,6 +92,8 @@ def test_allows_unrelated_file_suffixes():
         "changes/24.adicionado.md",
         "changes/cancelar-backup.alterado.md",
         "changes/correção.corrigido.md",
+        "changes/login.added.md",
+        "changes/limits.security.md",
         "changes/segredos.segurança.md",
         "changes/segredos.seguranca.md",
         "changes/guia.docs.md",
@@ -106,7 +108,7 @@ def test_accepts_changelog_fragment_names(path):
     ["changes/sem-tipo.md", "changes/x.feature.md", "changes/x/y.docs.md", "changes/README.md"],
 )
 def test_rejects_invalid_changelog_fragment_names(path):
-    assert "fragmento do changelog inválido" in check_pr.check_path(path)[0].message
+    assert "invalid changelog fragment name" in check_pr.check_path(path)[0].message
 
 
 def test_changelog_warning_accepts_fragment_or_direct_release_update():
@@ -192,7 +194,7 @@ def test_every_finding_explains_how_to_fix():
     third_party = "pessoa" + "@cliente.com.br"
     finding = check_pr.check_text("doc.md", third_party)[0]
     assert finding.format().startswith("doc.md:1:")
-    assert "Como corrigir:" in finding.format()
+    assert "How to fix:" in finding.format()
 
 
 def git(repo, *args, env=None):
@@ -215,7 +217,7 @@ def test_validate_pull_request_reads_git_range(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 
     findings = check_pr.validate_pull_request(base, head, "Título", "Descrição")
-    assert any("falta a linha Signed-off-by" in finding.message for finding in findings)
+    assert any("missing Signed-off-by line" in finding.message for finding in findings)
 
 
 def test_only_new_lines_of_a_changed_file_are_scanned(tmp_path, monkeypatch):
@@ -261,7 +263,7 @@ def test_pull_request_metadata_is_scanned_for_sensitive_data(tmp_path, monkeypat
 
     body = "Servidor https://cliente-real" + ".bimcloud.com"
     findings = check_pr.validate_pull_request(base, head, "Título", body)
-    assert any(finding.location == "descrição do PR:1" for finding in findings)
+    assert any(finding.location == "PR description:1" for finding in findings)
 
 
 def test_added_lines_are_compared_with_merge_base_when_main_advanced(tmp_path, monkeypatch):

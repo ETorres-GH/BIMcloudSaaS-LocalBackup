@@ -1,1 +1,0 @@
-- Instalador por usuário, sem permissão de administrador.

@@ -42,8 +42,8 @@ def parse_tag(tag: str) -> tuple[str, bool]:
     match = TAG_PATTERN.fullmatch(tag)
     if match is None:
         raise TagError(
-            f"Tag inválida: {tag!r}. Use vMAJOR.MINOR.PATCH, com -alpha.N, -beta.N ou -rc.N "
-            "opcional (ex.: v0.2.0 ou v0.2.0-rc.1)."
+            f"Invalid tag: {tag!r}. Use vMAJOR.MINOR.PATCH, with an optional -alpha.N, -beta.N "
+            "or -rc.N (e.g. v0.2.0 or v0.2.0-rc.1)."
         )
     version = f"{match['major']}.{match['minor']}.{match['patch']}"
     if match["pre"] is None:
@@ -56,7 +56,7 @@ def write_version(version: str, init_file: Path = INIT_FILE) -> None:
     text = init_file.read_text(encoding="utf-8")
     new_text, count = VERSION_LINE.subn(f'__version__ = "{version}"', text)
     if count != 1:
-        raise RuntimeError(f"Esperava uma linha __version__ em {init_file}, achei {count}.")
+        raise RuntimeError(f"Expected one __version__ line in {init_file}, found {count}.")
     init_file.write_text(new_text, encoding="utf-8")
 
 
@@ -70,8 +70,8 @@ def write_github_output(tag: str, version: str, prerelease: bool) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("tag", help="tag do Git, ex.: v0.2.0")
-    parser.add_argument("--check", action="store_true", help="só valida, sem gravar")
+    parser.add_argument("tag", help="Git tag, e.g. v0.2.0")
+    parser.add_argument("--check", action="store_true", help="only validate, without writing")
     args = parser.parse_args(argv)
 
     try:

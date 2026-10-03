@@ -1,5 +1,6 @@
 import pytest
 
+from bimcloud_backup import i18n
 from bimcloud_backup.auth import Tokens
 
 SERVER = "https://example.bimcloud.com"
@@ -34,3 +35,15 @@ class MemoryTokenStore:
 @pytest.fixture
 def tokens():
     return Tokens.from_response(token_response())
+
+
+# Most tests check the Portuguese texts, including windows built once per module, before any
+# function fixture runs. Tests of English set it themselves and `portuguese` puts it back.
+i18n.set_language(i18n.PORTUGUESE)
+
+
+@pytest.fixture(autouse=True)
+def portuguese():
+    i18n.set_language(i18n.PORTUGUESE)
+    yield
+    i18n.set_language(i18n.PORTUGUESE)

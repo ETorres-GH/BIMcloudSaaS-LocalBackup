@@ -1,1 +1,0 @@
-- Lista dos itens com erro de cada backup, com o motivo em palavras simples e o que fazer.

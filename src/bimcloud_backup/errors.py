@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import requests
 
+from bimcloud_backup.i18n import t
+
 # HTTP status BIMcloud uses for its own application errors.
 BIMCLOUD_ERROR_STATUS = 430
 
@@ -33,9 +35,7 @@ def refuse_redirect(response: requests.Response) -> None:
     """Downloads never follow redirects: the address was checked, where it points to was not."""
     if response.is_redirect or 300 <= response.status_code < 400:
         response.close()
-        raise BimcloudError(
-            f"O servidor redirecionou o download (HTTP {response.status_code}); recusado"
-        )
+        raise BimcloudError(t("download.redirect_refused", status=response.status_code))
 
 
 def raise_for_response(response: requests.Response) -> None:
@@ -46,13 +46,13 @@ def raise_for_response(response: requests.Response) -> None:
     if isinstance(blob_error, dict) and "error-code" in blob_error:
         # Blob Server errors: {"data": {"error-code": 4, "error-message": "..."}}
         raise ApiError(
-            blob_error.get("error-message", "Erro desconhecido do servidor de arquivos"),
+            blob_error.get("error-message", t("errors.unknown_blob_server")),
             code=blob_error.get("error-code"),
             status=response.status_code,
         )
     if response.status_code == BIMCLOUD_ERROR_STATUS:
         raise ApiError(
-            body.get("error-message", "Erro desconhecido do BIMcloud"),
+            body.get("error-message", t("errors.unknown_bimcloud")),
             code=body.get("error-code"),
             status=response.status_code,
         )

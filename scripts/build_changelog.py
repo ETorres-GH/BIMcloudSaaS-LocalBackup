@@ -22,12 +22,17 @@ CHANGELOG = ROOT / "CHANGELOG.md"
 CHANGES_DIR = ROOT / "changes"
 UNRELEASED = "## [Unreleased]"
 TYPE_HEADINGS = {
-    "adicionado": "Adicionado",
-    "alterado": "Alterado",
-    "corrigido": "Corrigido",
-    "segurança": "Segurança",
-    "seguranca": "Segurança",
-    "docs": "Documentação",
+    "added": "Added",
+    "changed": "Changed",
+    "fixed": "Fixed",
+    "security": "Security",
+    "docs": "Documentation",
+    # The Portuguese types of earlier fragments, under the same headings.
+    "adicionado": "Added",
+    "alterado": "Changed",
+    "corrigido": "Fixed",
+    "segurança": "Security",
+    "seguranca": "Security",
 }
 FRAGMENT_PATTERN = re.compile(rf"(?P<identifier>.+)\.(?P<type>{'|'.join(TYPE_HEADINGS)})\.md")
 TAG_PATTERN = re.compile(
@@ -44,7 +49,7 @@ class ChangelogError(ValueError):
 def parse_version(tag: str) -> str:
     match = TAG_PATTERN.fullmatch(tag)
     if match is None:
-        raise ChangelogError(f"Versão inválida: {tag!r}. Use vMAJOR.MINOR.PATCH.")
+        raise ChangelogError(f"Invalid version: {tag!r}. Use vMAJOR.MINOR.PATCH.")
     return match["version"]
 
 
@@ -52,9 +57,9 @@ def validate_release_date(value: str) -> str:
     try:
         parsed = date.fromisoformat(value)
     except ValueError as exc:
-        raise ChangelogError(f"Data inválida: {value!r}. Use AAAA-MM-DD.") from exc
+        raise ChangelogError(f"Invalid date: {value!r}. Use YYYY-MM-DD.") from exc
     if parsed.isoformat() != value:
-        raise ChangelogError(f"Data inválida: {value!r}. Use AAAA-MM-DD.")
+        raise ChangelogError(f"Invalid date: {value!r}. Use YYYY-MM-DD.")
     return value
 
 
@@ -69,11 +74,11 @@ def read_fragments(changes_dir: Path) -> tuple[dict[str, list[str]], list[Path]]
         if match is None:
             allowed = ", ".join(TYPE_HEADINGS)
             raise ChangelogError(
-                f"Fragmento inválido: {path.name}. Use <identificador>.<tipo>.md; tipos: {allowed}."
+                f"Invalid fragment: {path.name}. Use <identifier>.<type>.md; types: {allowed}."
             )
         body = path.read_text(encoding="utf-8").strip()
         if not body or not body.startswith("- "):
-            raise ChangelogError(f"Fragmento {path.name} deve começar com um item Markdown '- '.")
+            raise ChangelogError(f"Fragment {path.name} must start with a Markdown item '- '.")
         fragments[match["type"]].append(body)
         consumed.append(path)
     return fragments, consumed
@@ -83,7 +88,7 @@ def split_unreleased(text: str) -> tuple[str, str, str]:
     """Return text through the Unreleased heading, its body, and all later releases."""
     marker = re.search(rf"(?m)^{re.escape(UNRELEASED)}[ \t]*$", text)
     if marker is None:
-        raise ChangelogError(f"{UNRELEASED} não encontrado no CHANGELOG.md.")
+        raise ChangelogError(f"{UNRELEASED} not found in CHANGELOG.md.")
     next_release = re.search(r"(?m)^## ", text[marker.end() :])
     end = marker.end() + next_release.start() if next_release else len(text)
     return text[: marker.end()], text[marker.end() : end].strip(), text[end:].lstrip()
@@ -151,15 +156,15 @@ def build_changelog(
     if existing is not None:
         if consumed:
             raise ChangelogError(
-                f"A versão {version} já existe, mas ainda há fragmentos. "
-                "Prepare uma nova versão ou apague os fragmentos."
+                f"Version {version} already exists, but there are fragments left. "
+                "Prepare a new version or delete the fragments."
             )
         notes = existing
     else:
         prefix, unreleased_body, later_releases = split_unreleased(text)
         notes = merge_fragments(unreleased_body, fragments)
         if not notes:
-            raise ChangelogError("Não há texto em [Unreleased] nem fragmentos para a Release.")
+            raise ChangelogError("There is no text in [Unreleased] nor fragments for the release.")
         new_text = f"{prefix}\n\n## [{version}] - {release_date}\n\n{notes}\n"
         if later_releases:
             new_text += f"\n{later_releases.rstrip()}\n"
@@ -175,20 +180,20 @@ def build_changelog(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("tag", help="tag da Release, ex.: v0.2.0")
-    parser.add_argument("--date", default=date.today().isoformat(), help="data YYYY-MM-DD")
-    parser.add_argument("--output", type=Path, help="arquivo Markdown para o corpo da Release")
+    parser.add_argument("tag", help="release tag, e.g. v0.2.0")
+    parser.add_argument("--date", default=date.today().isoformat(), help="date YYYY-MM-DD")
+    parser.add_argument("--output", type=Path, help="Markdown file for the release body")
     args = parser.parse_args(argv)
     try:
         version = parse_version(args.tag)
         notes = build_changelog(version, args.date, output=args.output)
     except (ChangelogError, OSError) as exc:
-        print(f"Erro ao montar o CHANGELOG: {exc}", file=sys.stderr)
+        print(f"Could not build the CHANGELOG: {exc}", file=sys.stderr)
         return 1
     if args.output is None:
         print(notes)
     else:
-        print(f"CHANGELOG e notas da versão {version} gerados; fragmentos consumidos.")
+        print(f"CHANGELOG and notes of version {version} built; fragments consumed.")
     return 0
 
 

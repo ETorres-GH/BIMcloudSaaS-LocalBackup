@@ -1,74 +1,79 @@
-# Exemplo de configuração. A janela do programa cria e edita este arquivo em
-# %APPDATA%\BIMcloudSaaS-LocalBackup\config.toml; só é preciso editar à mão no Server Core.
+# Example configuration. The program's window creates and edits this file in
+# %APPDATA%\BIMcloudSaaS-LocalBackup\config.toml; editing it by hand is only needed on Server Core.
 
 [bimcloud]
-# Endereço que você abre no navegador para acessar o BIMcloud Manager.
-server_url = "https://seu-escritorio.bimcloud.com"
+# Address you open in the browser to reach BIMcloud Manager.
+server_url = "https://example.bimcloud.com"
 
-# Não altere, a não ser que o suporte peça.
+# Do not change it, unless support asks.
 client_id = "bimcloud-localbackup"
 
-# Opcional: preenche o usuário na tela de login.
-username = "usuario@escritorio.com"
+# Optional: fills in the user on the login page.
+username = "user@example.com"
 
-# Pastas do BIMcloud a copiar, com o caminho a partir da raiz (ex.: ["Obras/2026"]).
-# Vazio = o BIMcloud inteiro.
+# BIMcloud folders to copy, with the path from the root (e.g. ["Works/2026"]).
+# Empty = the whole BIMcloud.
 source_folders = []
 
-# Projetos e bibliotecas escolhidos um a um, além das pastas (ex.: ["Obras/ProjetoA"]).
+# Projects and libraries chosen one by one, besides the folders (e.g. ["Works/ProjectA"]).
 source_projects = []
 source_libraries = []
 
-# A senha não fica aqui: o login é feito pelo navegador, em "Entrar no BIMcloud".
+# The password is not here: the sign-in happens in the browser, with "Sign in to BIMcloud".
 
 [backup]
-# Pasta onde os backups são gravados (use / ou \\ no caminho).
+# Folder where the backups are written (use / or \\ in the path).
 directory = "D:/BIMcloud-Backups"
 
-# O que copiar. "files" são os arquivos que não são projetos nem bibliotecas.
+# What to copy. "files" are the files that are neither projects nor libraries.
 include_projects = true
 include_libraries = true
 include_files = true
 
-# Formato dos projetos: "bimproject", "pln" (o último .pln do BIMcloud) ou "both".
+# How projects are saved: "bimproject", "pln" (the latest .pln of BIMcloud) or "both".
 projects_format = "bimproject"
 
-# Inclui os snapshots do BIMcloud no .BIMProject e no .BIMLibrary (arquivos bem maiores).
+# Includes BIMcloud's snapshots in the .BIMProject and the .BIMLibrary (much larger files).
 include_backups_in_export = false
 include_backups_in_library_export = false
 
-# "history": guarda retention_days dias de backups.  "latest": só o último.
+# "history": keeps retention_days days of backups.  "latest": only the last one.
 versioning = "history"
 retention_days = 30
 
-# Os N backups mais recentes nunca são apagados.
+# The N most recent backups are never deleted.
 min_backups_to_keep = 1
 
-# Para o backup depois deste tempo (0 = sem limite).
+# Stops the backup after this time (0 = no limit).
 max_duration_hours = 4
 
-# Para o backup se o espaço livre ficar abaixo disto (0 = não verificar).
+# Stops the backup if the free space falls below this (0 = do not check).
 min_free_space_gb = 10
 
-# Quantos arquivos baixar ao mesmo tempo (1 a 8).
+# How many files to download at the same time (1 to 8).
 parallel_downloads = 3
 
-# Desiste de um projeto ou biblioteca que fica este tempo (minutos) sem avançar no BIMcloud.
+# Gives up a project or library that stays this long (minutes) with no progress on BIMcloud.
 export_stall_minutes = 20
 
 [schedule]
-# A cada `every` unidades: "minutes" (1 a 1439), "hours" (1 a 23) ou "days" (1 a 365).
-# Com "days", o backup roda no horário run_at.
+# Every `every` units: "minutes" (1 to 1439), "hours" (1 to 23) or "days" (1 to 365).
+# With "days", the backup runs at run_at.
 every = 1
 unit = "days"
 run_at = "23:00"
 
-# Aviso do Windows quando um backup automático falha.
+# Windows notification when an automatic backup fails.
 notify_failures = true
 
-# Roda mesmo sem ninguém conectado no Windows (servidores). Pede a senha do Windows ao agendar.
+# Runs even with nobody signed in to Windows (servers). Asks for the Windows password when
+# scheduling.
 run_logged_off = false
 
 [logging]
-# Log detalhado, só para investigar problemas.
+# Detailed log, only to look into problems.
 verbose = false
+
+[interface]
+# Language of the window, the messages and the log: "en" (English) or "pt-BR" (Português).
+language = "en"

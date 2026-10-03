@@ -1,7 +1,8 @@
-﻿# Gera dist\BIMcloudBackup-Setup.exe com o Inno Setup, a partir de dist\BIMcloudBackup.exe.
-# Uso: .\scripts\build_installer.ps1 [-Required]
-# Procura o ISCC.exe na variável ISCC, no PATH e nas pastas padrão do Inno Setup 6. Sem ele, só
-# avisa e sai sem erro, porque o instalador é opcional no build local; com -Required, falha.
+﻿# Builds dist\BIMcloudBackup-Setup.exe with Inno Setup, from dist\BIMcloudBackup.exe.
+# Usage: .\scripts\build_installer.ps1 [-Required]
+# Looks for ISCC.exe in the ISCC variable, in the PATH and in the default Inno Setup 6 folders.
+# Without it, only warns and exits with no error, since the installer is optional in a local
+# build; with -Required, fails.
 
 param([switch]$Required)
 
@@ -17,23 +18,23 @@ $candidates = @(
 )
 $iscc = $candidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
 if (-not $iscc) {
-    $message = "Inno Setup não encontrado: o instalador não foi gerado (instale o Inno Setup 6 ou rode scripts\install_inno.ps1)."
+    $message = "Inno Setup not found: the installer was not built (install Inno Setup 6 or run scripts\install_inno.ps1)."
     if ($Required) { throw $message }
     Write-Warning $message
     exit 0
 }
 
-if (-not (Test-Path "dist\BIMcloudBackup.exe")) { throw "Gere antes o dist\BIMcloudBackup.exe" }
+if (-not (Test-Path "dist\BIMcloudBackup.exe")) { throw "Build dist\BIMcloudBackup.exe first" }
 
-# Versão lida do pacote (src\bimcloud_backup\__init__.py), a mesma do executável.
+# Version read from the package (src\bimcloud_backup\__init__.py), the same as the executable's.
 $init = Get-Content "src\bimcloud_backup\__init__.py" -Raw
 $match = [regex]::Match($init, '__version__ = "([^"]+)"')
-if (-not $match.Success) { throw "Versão não encontrada em src\bimcloud_backup\__init__.py" }
+if (-not $match.Success) { throw "Version not found in src\bimcloud_backup\__init__.py" }
 $version = $match.Groups[1].Value
-# O Windows só aceita números no campo de versão do arquivo: 0.2.0rc1 -> 0.2.0.
+# Windows only takes numbers in the file version field: 0.2.0rc1 -> 0.2.0.
 $numeric = [regex]::Match($version, '^\d+(\.\d+){0,3}').Value
 
 & $iscc /Q "/DAppVersion=$version" "/DAppVersionNumeric=$numeric" "installer\BIMcloudBackup.iss"
-if ($LASTEXITCODE -ne 0) { throw "Falha ao gerar o instalador" }
+if ($LASTEXITCODE -ne 0) { throw "Could not build the installer" }
 
-Write-Host "Instalador gerado em dist\BIMcloudBackup-Setup.exe (versão $version)"
+Write-Host "Installer built in dist\BIMcloudBackup-Setup.exe (version $version)"

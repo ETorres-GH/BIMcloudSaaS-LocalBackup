@@ -16,6 +16,7 @@ from urllib.parse import urlencode
 import requests
 
 from bimcloud_backup.errors import AuthError, raise_for_response
+from bimcloud_backup.i18n import t
 
 KEYRING_SERVICE = "BIMcloudSaaS-LocalBackup"
 LOGIN_TIMEOUT_SECONDS = 300
@@ -41,7 +42,7 @@ class Tokens:
                 user_id=data["user_id"],
             )
         except (KeyError, TypeError, ValueError) as e:
-            raise AuthError(f"Resposta de token inesperada do BIMcloud: {e}") from e
+            raise AuthError(t("auth.unexpected_token", error=e)) from e
 
 
 def pkce_pair() -> tuple[str, str]:
@@ -116,7 +117,7 @@ def _wait_for_authorization_code(
         if result.get("status") == "succeeded" and result.get("code"):
             return result["code"]
         sleep(1)
-    raise AuthError(f"O login não foi concluído em {timeout_seconds // 60} minutos.")
+    raise AuthError(t("auth.login_timeout", minutes=timeout_seconds // 60))
 
 
 def _request_tokens(session: requests.Session, server_url: str, form: dict) -> Tokens:

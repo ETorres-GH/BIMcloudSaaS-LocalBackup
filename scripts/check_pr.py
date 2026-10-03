@@ -15,13 +15,25 @@ LINE_START = r"(?im)^\s*(?:(?:[^\w\s]|_)\s*)*"
 CO_AUTHOR = re.compile(LINE_START + r"co-authored-by\s*:.*$")
 GENERATED_WITH = re.compile(LINE_START + r"generated\s+with\b.*$")
 FORBIDDEN_ATTRIBUTION = (
-    (CO_AUTHOR, "cada commit tem um único autor; remova a linha Co-Authored-By"),
-    (GENERATED_WITH, "remova a assinatura 'Generated with'"),
-    (re.compile("🤖"), "remova o emoji de assinatura"),
+    (CO_AUTHOR, "each commit has a single author; remove the Co-Authored-By line"),
+    (GENERATED_WITH, "remove the 'Generated with' signature"),
+    (re.compile("🤖"), "remove the signature emoji"),
 )
 SIGNOFF = re.compile(r"(?im)^signed-off-by\s*:\s*(.+?)\s*<([^<>]+)>\s*$")
 FORBIDDEN_SUFFIX = re.compile(r"(?i)(?:\.pln|\.bimproject[^/\\]*|\.bimlibrary|\.archive|\.pla)$")
-CHANGE_TYPES = ("adicionado", "alterado", "corrigido", "segurança", "seguranca", "docs")
+# English types, plus the Portuguese ones of earlier fragments.
+CHANGE_TYPES = (
+    "added",
+    "changed",
+    "fixed",
+    "security",
+    "docs",
+    "adicionado",
+    "alterado",
+    "corrigido",
+    "segurança",
+    "seguranca",
+)
 CHANGE_FRAGMENT = re.compile(rf"changes/[^/]+\.(?:{'|'.join(CHANGE_TYPES)})\.md")
 BIMCLOUD_HOST = re.compile(
     r"(?i)(?<![a-z0-9-])"
@@ -68,7 +80,7 @@ class Finding(NamedTuple):
     fix: str
 
     def format(self) -> str:
-        return f"{self.location}: {self.message}. Como corrigir: {self.fix}."
+        return f"{self.location}: {self.message}. How to fix: {self.fix}."
 
 
 def line_number(text: str, offset: int) -> int:
@@ -82,7 +94,7 @@ def check_attribution(origin: str, text: str) -> list[Finding]:
             findings.append(
                 Finding(
                     f"{origin}:{line_number(text, match.start())}",
-                    "assinatura de ferramenta não permitida",
+                    "tool signature not allowed",
                     fix,
                 )
             )
@@ -101,8 +113,8 @@ def check_commit(
         findings.append(
             Finding(
                 f"commit {commit}:1",
-                "falta a linha Signed-off-by",
-                "refaça o commit com git commit -s",
+                "missing Signed-off-by line",
+                "redo the commit with git commit -s",
             )
         )
     elif (
@@ -116,8 +128,8 @@ def check_commit(
         findings.append(
             Finding(
                 f"commit {commit}:1",
-                "Signed-off-by não corresponde ao autor do commit",
-                f"assine como {author_name} <{author_email}>",
+                "Signed-off-by does not match the commit author",
+                f"sign off as {author_name} <{author_email}>",
             )
         )
     return findings
@@ -137,17 +149,17 @@ def check_path(path: str) -> list[Finding]:
         return [
             Finding(
                 f"{path}:1",
-                "nome de fragmento do changelog inválido",
-                "use changes/<identificador>.<tipo>.md, com tipo adicionado, alterado, "
-                "corrigido, segurança, seguranca ou docs",
+                "invalid changelog fragment name",
+                "use changes/<identifier>.<type>.md, with type added, changed, fixed, "
+                "security or docs",
             )
         ]
     if FORBIDDEN_SUFFIX.search(path):
         return [
             Finding(
                 f"{path}:1",
-                "arquivo de projeto ou backup real não permitido",
-                "remova o arquivo do commit e use somente fixtures textuais anonimizadas",
+                "real project or backup file not allowed",
+                "remove the file from the commit and use only anonymized text fixtures",
             )
         ]
     return []
@@ -158,8 +170,8 @@ def changelog_warnings(paths: list[str]) -> list[str]:
     if "CHANGELOG.md" in paths or any(CHANGE_FRAGMENT.fullmatch(path) for path in paths):
         return []
     return [
-        "pull request sem fragmento do changelog; adicione changes/<identificador>.<tipo>.md "
-        "se a mudança for relevante para usuários"
+        "pull request without a changelog fragment; add changes/<identifier>.<type>.md "
+        "if the change matters to users"
     ]
 
 
@@ -200,23 +212,22 @@ def check_lines(path: str, lines: list[tuple[int, str]]) -> list[Finding]:
                 findings.append(
                     Finding(
                         location,
-                        f"host BIMcloud real não permitido ({host})",
-                        "troque o nome do servidor por um placeholder como "
-                        "<escritorio>.bimcloud.com",
+                        f"real BIMcloud host not allowed ({host})",
+                        "replace the server name with a placeholder such as <office>.bimcloud.com",
                     )
                 )
         for match in JWT.finditer(line):
             if not is_test_fixture(path, match.group(0)):
                 findings.append(
-                    Finding(location, "JWT possivelmente real", "substitua o valor por <REMOVIDO>")
+                    Finding(location, "possibly real JWT", "replace the value with <REMOVIDO>")
                 )
         for match in BEARER.finditer(line):
             if not is_test_fixture(path, match.group(1)):
                 findings.append(
                     Finding(
                         location,
-                        "token Bearer possivelmente real",
-                        "substitua o valor por Bearer <token>",
+                        "possibly real Bearer token",
+                        "replace the value with Bearer <token>",
                     )
                 )
         for match in SECRET_VALUE.finditer(line):
@@ -225,8 +236,8 @@ def check_lines(path: str, lines: list[tuple[int, str]]) -> list[Finding]:
                 findings.append(
                     Finding(
                         location,
-                        "identificador ou token possivelmente real",
-                        "substitua o valor por <REMOVIDO>, <token> ou somente zeros",
+                        "possibly real identifier or token",
+                        "replace the value with <REMOVIDO>, <token> or only zeros",
                     )
                 )
         for match in EMAIL.finditer(line):
@@ -235,8 +246,8 @@ def check_lines(path: str, lines: list[tuple[int, str]]) -> list[Finding]:
                 findings.append(
                     Finding(
                         location,
-                        f"e-mail de terceiro não permitido ({address})",
-                        "remova ou anonimize o endereço",
+                        f"third-party e-mail not allowed ({address})",
+                        "remove or anonymize the address",
                     )
                 )
     return findings
@@ -308,10 +319,10 @@ def read_added_lines(base: str, head: str, path: str) -> list[tuple[int, str]]:
 
 
 def validate_pull_request(base: str, head: str, title: str, body: str) -> list[Finding]:
-    findings = check_attribution("título do PR", title)
-    findings.extend(check_attribution("descrição do PR", body))
-    findings.extend(check_text("título do PR", title))
-    findings.extend(check_text("descrição do PR", body))
+    findings = check_attribution("PR title", title)
+    findings.extend(check_attribution("PR description", body))
+    findings.extend(check_text("PR title", title))
+    findings.extend(check_text("PR description", body))
     comparison_base = merge_base(base, head)
     for commit, author_name, author_email, message in read_commits(base, head):
         findings.extend(check_commit(commit, message, author_name, author_email))
@@ -323,19 +334,19 @@ def validate_pull_request(base: str, head: str, title: str, body: str) -> list[F
 
 def validate_commit_message_file(path: str) -> list[Finding]:
     with Path(path).open(encoding="utf-8") as file:
-        return check_commit("mensagem", file.read())
+        return check_commit("message", file.read())
 
 
 def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--base", help="SHA base do pull request")
-    parser.add_argument("--head", help="SHA de destino do pull request")
-    parser.add_argument("--commit-message-file", help="valida somente uma mensagem de commit")
+    parser.add_argument("--base", help="base SHA of the pull request")
+    parser.add_argument("--head", help="head SHA of the pull request")
+    parser.add_argument("--commit-message-file", help="validate only a commit message")
     args = parser.parse_args(argv)
     if args.commit_message_file and (args.base or args.head):
-        parser.error("--commit-message-file não pode ser combinado com --base/--head")
+        parser.error("--commit-message-file cannot be combined with --base/--head")
     if not args.commit_message_file and (not args.base or not args.head):
-        parser.error("informe --base e --head")
+        parser.error("give --base and --head")
     return args
 
 
@@ -354,7 +365,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             warnings = changelog_warnings(read_changed_paths(args.base, args.head))
     except (OSError, subprocess.CalledProcessError, ValueError) as exc:
-        print(f"Erro ao validar o pull request: {exc}", file=sys.stderr)
+        print(f"Could not validate the pull request: {exc}", file=sys.stderr)
         return 2
 
     for finding in findings:
@@ -362,9 +373,9 @@ def main(argv: list[str] | None = None) -> int:
     for warning in warnings:
         print(f"::warning::{warning}")
     if findings:
-        print(f"Validação falhou com {len(findings)} problema(s).", file=sys.stderr)
+        print(f"Validation failed with {len(findings)} problem(s).", file=sys.stderr)
         return 1
-    print("Regras do pull request validadas com sucesso.")
+    print("Pull request rules validated.")
     return 0
 
 
