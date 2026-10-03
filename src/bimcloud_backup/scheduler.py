@@ -16,6 +16,7 @@ from datetime import datetime
 from pathlib import Path
 
 from bimcloud_backup.config import UNIT_DAYS, UNIT_HOURS, Config
+from bimcloud_backup.i18n import t
 
 TASK_NAME = "BIMcloudSaaS-LocalBackup"
 # Keeps schtasks from flashing a console window when called from the GUI.
@@ -53,13 +54,11 @@ PASSWORD_SCRIPT = "\n".join(
         "}",
     ]
 )
+# The text of each, by its key in the locales.
 PASSWORD_ERRORS = {
-    0x8007052E: "O Windows não aceitou a senha. Confira a senha da sua conta do Windows.",
-    0x80070569: (
-        "A sua conta do Windows não tem permissão para rodar tarefas sem estar conectada "
-        "(direito “Fazer logon como um trabalho em lotes”). Peça ao administrador do servidor."
-    ),
-    0x80070005: "O Windows negou acesso ao Agendador de Tarefas.",
+    0x8007052E: "scheduler.wrong_password",
+    0x80070569: "scheduler.no_batch_logon",
+    0x80070005: "scheduler.access_denied",
 }
 TIMEOUT_SECONDS = 60
 # GetDriveTypeW: a drive letter mapped to a network share.
@@ -72,8 +71,8 @@ class SchedulerError(RuntimeError):
 
 def backup_command(config_path: Path) -> list[str]:
     """Command line the scheduled task runs."""
-    # --agendado: the run was started by the task, so failures show a Windows notification.
-    args = ["--config", str(config_path), "run", "--agendado"]
+    # --scheduled: the run was started by the task, so failures show a Windows notification.
+    args = ["--config", str(config_path), "run", "--scheduled"]
     if getattr(sys, "frozen", False):
         return [sys.executable, *args]
     # pythonw.exe runs without opening a console window.
@@ -132,10 +131,7 @@ def check_destination(backup_dir: Path) -> None:
     """With nobody logged in there are no mapped drives: a share needs its \\\\server path."""
     drive = backup_dir.drive
     if len(drive) == 2 and drive[1] == ":" and _drive_type(drive + "\\") == DRIVE_REMOTE:
-        raise SchedulerError(
-            f"O destino {backup_dir} fica na unidade de rede {drive}, que só existe com você "
-            "conectado. Use o caminho de rede (\\\\servidor\\pasta) em “Onde salvar”."
-        )
+        raise SchedulerError(t("scheduler.mapped_drive", folder=backup_dir, drive=drive))
 
 
 def _drive_type(root: str) -> int:
@@ -160,7 +156,7 @@ def password_command() -> list[str]:
 
 def _set_password(password: str) -> None:
     secret = base64.b64encode(password.encode("utf-8")).decode("ascii")
-    fallback = "A tarefa ficou criada para rodar só com você conectado."
+    fallback = t("scheduler.fallback")
     try:
         result = subprocess.run(
             password_command(),
@@ -172,18 +168,18 @@ def _set_password(password: str) -> None:
         )
     except (OSError, subprocess.SubprocessError) as e:
         raise SchedulerError(
-            f"Não foi possível entregar a senha ao Agendador ({type(e).__name__}). {fallback}"
+            f"{t('scheduler.password_not_sent', error=type(e).__name__)} {fallback}"
         ) from None
     if result.returncode == 0 and result.stdout.strip() == "OK":
         return
     match = re.search(r"ERR (-?\d+)", result.stdout)
     code = int(match.group(1)) & 0xFFFFFFFF if match else None
     if code in PASSWORD_ERRORS:
-        message = PASSWORD_ERRORS[code]
+        message = t(PASSWORD_ERRORS[code])
     elif code is not None:
-        message = f"O Agendador recusou a senha (código 0x{code:08X})."
+        message = t("scheduler.password_refused", code=f"0x{code:08X}")
     else:
-        message = f"O Agendador não respondeu como esperado (código {result.returncode})."
+        message = t("scheduler.unexpected_answer", code=result.returncode)
     raise SchedulerError(f"{message} {fallback}")
 
 
@@ -206,7 +202,7 @@ def status() -> str | None:
         # Field name depends on the Windows language ("Next Run Time", "Próxima Execução"...).
         if key.strip().lower().startswith(("next run", "próxima", "proxima")):
             return value.strip()
-    return "agendada"
+    return t("scheduler.scheduled")
 
 
 def run_mode() -> str | None:
@@ -229,4 +225,4 @@ def _run(cmd: list[str]) -> None:
     result = subprocess.run(cmd, capture_output=True, text=True, creationflags=NO_WINDOW)
     if result.returncode != 0:
         message = (result.stderr or result.stdout).strip()
-        raise SchedulerError(message or f"schtasks terminou com código {result.returncode}")
+        raise SchedulerError(message or t("scheduler.schtasks_failed", code=result.returncode))

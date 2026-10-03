@@ -12,13 +12,12 @@ from tkinter import ttk
 
 import pytest
 
-from bimcloud_backup import gui
+from bimcloud_backup import gui, i18n
 from bimcloud_backup.backup import BackupCancelled, BackupResult, Progress
 from bimcloud_backup.config import Config, Selection, load_config, parse_config, save_config, to_raw
 from bimcloud_backup.errors import BimcloudError
-from bimcloud_backup.folder_picker import EVERYTHING, ITEM, FolderPicker
+from bimcloud_backup.folder_picker import ITEM, FolderPicker
 from bimcloud_backup.gui import (
-    BROWSER_WARNING,
     FILE_ONLY_OPTIONS,
     HELP,
     WINDOW_ICON_SIZES,
@@ -31,6 +30,7 @@ from bimcloud_backup.gui import (
     _same_schedule,
     describe_schedule,
 )
+from bimcloud_backup.i18n import LANGUAGES, t
 from bimcloud_backup.service import FolderListing
 from bimcloud_backup.state import STATUS_CANCELLED, LastRun
 from tests.conftest import MemoryTokenStore
@@ -53,7 +53,9 @@ def app():
 
 
 def test_form_round_trips_the_configuration(app):
-    assert app._config() == load_config(ROOT / "config.example.toml")
+    # The form saves the language the window is in.
+    expected = replace(load_config(ROOT / "config.example.toml"), language=i18n.language())
+    assert app._config() == expected
 
 
 def test_the_spare_height_always_goes_somewhere(app):
@@ -160,7 +162,7 @@ def test_picker_loads_folders_on_demand_and_returns_the_marked_ones(app):
     assert loaded == [""]
     assert tree.get_children("") == ("Obras", "Pastas Exemplo")
     assert tree.item("Obras", "text") == "☐  Obras"
-    assert picker.summary.get() == EVERYTHING
+    assert picker.summary.get() == "Nada marcado: o BIMcloud inteiro será copiado."
 
     tree.focus("Pastas Exemplo")
     picker._on_open()
@@ -361,7 +363,7 @@ def test_main_window_shows_a_summary_of_the_selection(app):
         assert app.selection_text.get() == "1 projeto"
     finally:
         app._set_selection(Selection())
-    assert app.selection_text.get() == EVERYTHING
+    assert app.selection_text.get() == "Nada marcado: o BIMcloud inteiro será copiado."
 
 
 @pytest.mark.parametrize(
@@ -453,7 +455,7 @@ def test_a_folder_that_failed_to_load_can_be_opened_again(app, monkeypatch):
     tree.focus("Pastas Exemplo")
     picker._on_open()
     assert tree.item("Pastas Exemplo", "open") in (0, False)
-    assert tree.get_children("Pastas Exemplo")[0].endswith("carregando")
+    assert tree.get_children("Pastas Exemplo")[0].endswith("loading")
 
     tree.focus("Pastas Exemplo")
     picker._on_open()
@@ -611,7 +613,7 @@ def test_cancelled_backup_is_shown_in_the_status_panel(app):
 
 
 def test_browser_warning_is_on_screen():
-    assert BROWSER_WARNING == "Durante o backup, feche o BIMcloud Manager no navegador."
+    assert t("status.browser_warning") == "Durante o backup, feche o BIMcloud Manager no navegador."
 
 
 def test_closing_during_a_backup_cancels_it_and_waits(app, monkeypatch):
@@ -1925,13 +1927,15 @@ REQUIRED_HELP = (
 def test_every_option_that_needs_it_has_a_help_mark(app):
     assert set(REQUIRED_HELP) <= set(app.help_marks)
     for key, mark in app.help_marks.items():
-        assert mark.text == HELP[key]
+        assert mark.text == t(f"help.{key}")
         assert str(mark.label.cget("takefocus")) in ("1", "True")
 
 
+@pytest.mark.parametrize("language", sorted(LANGUAGES))
 @pytest.mark.parametrize("key", sorted(HELP))
-def test_help_texts_are_short(key):
-    text = HELP[key]
+def test_help_texts_are_short(key, language):
+    i18n.set_language(language)
+    text = t(f"help.{key}")
     sentences = [part for part in re.split(r"(?<=[.!?])\s+", text) if part]
     assert 1 <= len(sentences) <= 3, text
     assert len(text) <= 240 and text == text.strip() and text.endswith(".")
@@ -1948,7 +1952,7 @@ def test_help_shows_with_the_mouse(app):
     try:
         assert mark.tooltip._pending is not None
         mark.tooltip.show()
-        assert _tip_text(mark) == HELP["snapshots"]
+        assert _tip_text(mark) == t("help.snapshots")
         mark.label.event_generate("<Leave>")
         assert mark.tooltip.window is None and mark.tooltip._pending is None
     finally:
@@ -1959,7 +1963,7 @@ def test_help_shows_with_the_keyboard_and_esc_hides_it(app):
     mark = app.help_marks["every"]
     try:
         mark.label.event_generate("<FocusIn>")
-        assert _tip_text(mark) == HELP["every"]
+        assert _tip_text(mark) == t("help.every")
         assert str(mark.label.cget("foreground")) == app.colors["ink"]
         # Keys only reach the widget with the focus, which a hidden test window never gets.
         assert mark.label.bind("<Escape>")
@@ -2038,3 +2042,105 @@ def test_the_advanced_window_keeps_the_marks_of_the_main_window(app):
         assert main.label.winfo_toplevel() is app.root
     finally:
         app.advanced_window.destroy()
+
+
+def test_changing_the_language_saves_it_and_rebuilds_the_window(app, saved_config):
+    app._append("linha de antes")
+    app.language_choice.set("en")
+    app._change_language("en")
+    try:
+        assert i18n.language() == "en"
+        assert load_config(saved_config).language == "en"
+        assert app.save_button.cget("text") == "Save changes"
+        assert app.run_button.cget("text").endswith("Back up now")
+        assert app.unit_box.cget("values")[0] in ("minute", "minutes")
+        # What happened before is still in the activity box, and nothing is left to save.
+        assert "linha de antes" in app.activity.get("1.0", "end")
+        assert not app.dirty
+        # Every "?" belongs to the new window: the old ones were destroyed with it.
+        assert all(mark.label.winfo_exists() for mark in app.help_marks.values())
+    finally:
+        app._change_language("pt-BR")
+    assert app.save_button.cget("text") == "Salvar alterações"
+    assert load_config(saved_config).language == "pt-BR"
+
+
+def test_the_language_does_not_change_during_a_backup(app, saved_config, monkeypatch):
+    shown = []
+    monkeypatch.setattr("bimcloud_backup.gui.messagebox.showinfo", lambda *a: shown.append(a))
+    app.busy = True
+    try:
+        app._change_language("en")
+    finally:
+        app.busy = False
+    assert i18n.language() == "pt-BR" and shown
+    assert app.language_choice.get() == "pt-BR"
+
+
+def test_the_first_window_offers_english_first(app):
+    dialog = gui.LanguageDialog(app.root)
+    try:
+        assert dialog.language.get() == "en"
+        assert dialog.button.cget("text") == "Continue"
+        dialog.language.set("pt-BR")
+        dialog._show_choice()
+        assert dialog.button.cget("text") == "Continuar"
+        dialog.confirm()
+        assert dialog.choice == "pt-BR"
+    finally:
+        if dialog.window.winfo_exists():
+            dialog.window.destroy()
+    closed = gui.LanguageDialog(app.root)
+    closed.close()
+    assert closed.choice is None
+
+
+class OpenedWindow(Exception):
+    pass
+
+
+def test_a_new_installation_asks_the_language_first(tmp_path, monkeypatch):
+    path = tmp_path / "config.toml"
+    asked = []
+    monkeypatch.setattr("bimcloud_backup.gui.tray.claim_single_instance", lambda: True)
+    monkeypatch.setattr("bimcloud_backup.gui._enable_dpi_awareness", lambda: None)
+    monkeypatch.setattr("bimcloud_backup.gui.tk.Tk", lambda: FakeRoot())
+    monkeypatch.setattr("bimcloud_backup.gui.ask_language", lambda root: asked.append(root) or "en")
+
+    def app(*args):
+        raise OpenedWindow(i18n.language())
+
+    monkeypatch.setattr("bimcloud_backup.gui.App", app)
+    with pytest.raises(OpenedWindow, match="^en$"):
+        gui.run_gui(path, MemoryTokenStore())
+    assert len(asked) == 1 and load_config_language(path) == "en"
+
+    # Chosen once: never asked again, and the window opens in that language.
+    with pytest.raises(OpenedWindow, match="^en$"):
+        gui.run_gui(path, MemoryTokenStore())
+    assert len(asked) == 1
+
+
+def test_starting_with_windows_never_asks_the_language(tmp_path, monkeypatch):
+    monkeypatch.setattr("bimcloud_backup.gui.tray.claim_single_instance", lambda: True)
+    monkeypatch.setattr("bimcloud_backup.gui._enable_dpi_awareness", lambda: None)
+    monkeypatch.setattr("bimcloud_backup.gui.tk.Tk", lambda: FakeRoot())
+    monkeypatch.setattr("bimcloud_backup.gui.ask_language", lambda root: pytest.fail("asked"))
+
+    def app(*args):
+        raise OpenedWindow(i18n.language())
+
+    monkeypatch.setattr("bimcloud_backup.gui.App", app)
+    with pytest.raises(OpenedWindow, match="^en$"):
+        gui.run_gui(tmp_path / "config.toml", MemoryTokenStore(), tray_only=True)
+
+
+class FakeRoot:
+    def withdraw(self):
+        pass
+
+
+def load_config_language(path):
+    from bimcloud_backup.config import saved_language
+
+    return saved_language(path)

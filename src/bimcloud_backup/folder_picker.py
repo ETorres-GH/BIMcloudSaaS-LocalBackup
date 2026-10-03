@@ -12,27 +12,23 @@ from tkinter import messagebox, ttk
 from typing import Any
 
 from bimcloud_backup.config import Selection, normalize_selection
+from bimcloud_backup.i18n import plural, t
 from bimcloud_backup.redaction import redact
 from bimcloud_backup.service import KIND_LIBRARY, KIND_PROJECT, FolderListing
 
 CHECKED = "☑"
 UNCHECKED = "☐"
-LOADING = "\0carregando"
+LOADING = "\0loading"
 # Tree ids of projects and libraries; folders use their path, which never starts with this.
 ITEM = "\0item:"
-EVERYTHING = "Nada marcado: o BIMcloud inteiro será copiado."
-NOT_COUNTED = "abra para contar"
-KIND_LABELS = {KIND_PROJECT: "projeto", KIND_LIBRARY: "biblioteca"}
+# Keys of what each kind of item is called in the "Projects and libraries" column.
+KIND_KEYS = {KIND_PROJECT: "picker.kind.project", KIND_LIBRARY: "picker.kind.library"}
 
 Loader = Callable[[str], FolderListing]
 Runner = Callable[[Callable[[], Any], Callable[[Any], None]], None]
 
 
-def _plural(count: int, singular: str, plural: str) -> str:
-    return f"{count} {singular if count == 1 else plural}"
-
-
-# With a few short paths chosen, the paths themselves say more than "1 pasta, 1 projeto".
+# With a few short paths chosen, the paths themselves say more than "1 folder, 1 project".
 # Past these limits the text would widen the main window, so the counts are shown instead.
 PATHS_SHOWN = 3
 PATHS_TEXT_LIMIT = 48
@@ -41,7 +37,7 @@ PATHS_TEXT_LIMIT = 48
 def describe_selection(selection: Selection, paths: bool = False) -> str:
     """Short text for what is chosen: the counts, or (`paths`) the paths when they are few."""
     if selection.everything:
-        return EVERYTHING
+        return t("picker.everything")
     chosen = [*selection.folders, *selection.projects, *selection.libraries]
     if paths and len(chosen) <= PATHS_SHOWN:
         text = ", ".join(chosen)
@@ -49,22 +45,22 @@ def describe_selection(selection: Selection, paths: bool = False) -> str:
             return text
     parts = []
     if selection.folders:
-        parts.append(_plural(len(selection.folders), "pasta", "pastas"))
+        parts.append(plural("picker.folders", len(selection.folders)))
     if selection.projects:
-        parts.append(_plural(len(selection.projects), "projeto", "projetos"))
+        parts.append(plural("picker.projects", len(selection.projects)))
     if selection.libraries:
-        parts.append(_plural(len(selection.libraries), "biblioteca", "bibliotecas"))
+        parts.append(plural("picker.libraries", len(selection.libraries)))
     return ", ".join(parts)
 
 
 def _counts(listing: FolderListing) -> str:
     if not listing.projects and not listing.libraries:
-        return "nenhum"
+        return t("picker.none")
     parts = []
     if listing.projects:
-        parts.append(_plural(listing.projects, "projeto", "projetos"))
+        parts.append(plural("picker.projects", listing.projects))
     if listing.libraries:
-        parts.append(_plural(listing.libraries, "biblioteca", "bibliotecas"))
+        parts.append(plural("picker.libraries", listing.libraries))
     return " · ".join(parts)
 
 
@@ -115,14 +111,13 @@ class FolderPicker:
         body.rowconfigure(1, weight=1)
         ttk.Label(
             body,
-            text="Marque pastas inteiras ou só alguns projetos e bibliotecas. Marcar uma pasta "
-            "inclui tudo o que está dentro dela.",
+            text=t("picker.intro"),
             wraplength=px(520),
         ).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 8))
 
         self.tree = ttk.Treeview(body, columns=("content",), selectmode="browse")
-        self.tree.heading("#0", text="Pasta, projeto ou biblioteca")
-        self.tree.heading("content", text="Projetos e bibliotecas")
+        self.tree.heading("#0", text=t("picker.column.item"))
+        self.tree.heading("content", text=t("picker.column.content"))
         self.tree.column("#0", width=px(330), stretch=True)
         self.tree.column("content", width=px(170), stretch=False)
         self.tree.tag_configure("inherited", foreground=muted)
@@ -147,10 +142,14 @@ class FolderPicker:
         )
         buttons = ttk.Frame(body)
         buttons.grid(row=3, column=0, columnspan=2, sticky="e", pady=(10, 0))
-        ttk.Button(buttons, text="Limpar", command=self.clear).pack(side="left", padx=(0, 8))
-        ttk.Button(buttons, text="Cancelar", command=self.cancel).pack(side="left", padx=(0, 8))
+        ttk.Button(buttons, text=t("picker.clear"), command=self.clear).pack(
+            side="left", padx=(0, 8)
+        )
+        ttk.Button(buttons, text=t("button.cancel"), command=self.cancel).pack(
+            side="left", padx=(0, 8)
+        )
         ttk.Button(
-            buttons, text="Usar esta seleção", style="Accent.TButton", command=self.confirm
+            buttons, text=t("picker.use"), style="Accent.TButton", command=self.confirm
         ).pack(side="left")
 
         self._update_summary()
@@ -168,7 +167,7 @@ class FolderPicker:
     # ------------------------------------------------------------- loading
 
     def _insert_loading(self, parent: str) -> None:
-        text = "Carregando pastas, projetos e bibliotecas do BIMcloud..." if not parent else "..."
+        text = t("picker.loading") if not parent else "..."
         self.tree.insert(parent, "end", iid=parent + LOADING, text=text, tags=("info",))
 
     def _fetch(self, path: str) -> None:
@@ -189,30 +188,30 @@ class FolderPicker:
         if path:
             self.tree.set(path, "content", _counts(listing))
         if not path and not listing.folders and not listing.items:
-            self.tree.insert("", "end", text="Nada no BIMcloud", tags=("info",))
+            self.tree.insert("", "end", text=t("picker.empty"), tags=("info",))
         for name, child in listing.folders:
             self._names[child] = name
             counts = listing.totals.get(child)
-            content = _counts(FolderListing([], *counts)) if counts else NOT_COUNTED
+            content = _counts(FolderListing([], *counts)) if counts else t("picker.not_counted")
             self.tree.insert(path, "end", iid=child, text=self._label(child), values=(content,))
             self._insert_loading(child)
         for name, item_path, kind in listing.items:
             iid = ITEM + item_path
             self._items[iid] = (name, item_path, kind)
             self.tree.insert(
-                path, "end", iid=iid, text=self._label(iid), values=(KIND_LABELS[kind],)
+                path, "end", iid=iid, text=self._label(iid), values=(t(KIND_KEYS[kind]),)
             )
         self._refresh_labels()
 
     def _failed(self, path: str, error: Exception) -> None:
         if self.tree.exists(path + LOADING):
-            self.tree.item(path + LOADING, text="Não foi possível carregar: feche e abra a pasta")
+            self.tree.item(path + LOADING, text=t("picker.load_failed"))
         if path and self.tree.exists(path):
             # Closed again, so opening it once more retries the load.
             self.tree.item(path, open=False)
         messagebox.showerror(
             self.window.title(),
-            f"Não foi possível listar as pastas do BIMcloud:\n{redact(str(error))}",
+            t("picker.list_failed", error=redact(str(error))),
             parent=self.window,
         )
         if not path:
@@ -302,7 +301,7 @@ class FolderPicker:
     def _update_summary(self) -> None:
         selection = self.selection
         text = describe_selection(selection)
-        self.summary.set(text if selection.everything else f"Marcados: {text}")
+        self.summary.set(text if selection.everything else t("picker.chosen", text=text))
 
     # ------------------------------------------------------------- closing
 

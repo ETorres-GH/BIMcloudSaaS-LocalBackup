@@ -47,7 +47,7 @@ def test_backups_are_summarised_newest_first(tmp_path):
         (".BIMProject", 1),
         (".pln", 1),
         (".BIMLibrary", 1),
-        ("arquivos", 2),
+        ("files", 2),
     )
     assert entries[1].status == history.STATUS_OK
 

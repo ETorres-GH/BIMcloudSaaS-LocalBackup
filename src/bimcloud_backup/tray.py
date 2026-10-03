@@ -14,6 +14,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from bimcloud_backup.i18n import t
+
 log = logging.getLogger("bimcloud_backup")
 
 # Hidden window of the icon; a second copy of the program finds the first one by this name.
@@ -23,7 +25,7 @@ MUTEX_NAME = "Local\\BIMcloudSaaS-LocalBackup"
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 RUN_VALUE = "BIMcloudSaaS-LocalBackup"
 # Command-line option of the entry in Run: start with only the icon, the window hidden.
-TRAY_ONLY_OPTION = "--bandeja"
+TRAY_ONLY_OPTION = "--tray"
 TIP_LIMIT = 127
 
 # What the icon asks the window to do.
@@ -53,8 +55,9 @@ SM_CXSMICON, SM_CYSMICON = 49, 50
 IDI_APPLICATION = 32512
 ERROR_ALREADY_EXISTS = 183
 
-MENU = ((OPEN, "Abrir"), (BACKUP, "Fazer backup agora"), (None, None), (EXIT, "Sair"))
-MENU_IDS = {action: number for number, (action, _text) in enumerate(MENU, start=1) if action}
+# The texts are looked up each time the menu opens, so they follow the chosen language.
+MENU = ((OPEN, "tray.open"), (BACKUP, "tray.backup"), (None, None), (EXIT, "tray.exit"))
+MENU_IDS = {action: number for number, (action, _key) in enumerate(MENU, start=1) if action}
 
 ICON_FILE = Path(__file__).resolve().parent / "assets" / "icon.ico"
 
@@ -137,9 +140,9 @@ class TrayIcon:
             self.listening = True
             self.running = self._notify(NIM_ADD, NIF_MESSAGE | NIF_ICON | NIF_TIP)
             if not self.running:
-                log.warning("Não foi possível pôr o ícone na área de notificação")
+                log.warning(t("tray.icon_failed"))
         except OSError:
-            log.warning("Não foi possível pôr o ícone na área de notificação", exc_info=True)
+            log.warning(t("tray.icon_failed"), exc_info=True)
         finally:
             ready.set()
         if not self.listening:
@@ -157,7 +160,7 @@ class TrayIcon:
             0, WINDOW_CLASS, self.title, 0, 0, 0, 0, 0, None, None, hinstance, None
         )
         if not self.hwnd:
-            raise OSError("CreateWindowExW falhou")
+            raise OSError("CreateWindowExW failed")
         _icons[self.hwnd] = self
         # Explorer announces this when it restarts: the icon has to be added again.
         self.taskbar_created = api.user32.RegisterWindowMessageW("TaskbarCreated")
@@ -191,20 +194,20 @@ class TrayIcon:
                 self.running = self._notify(NIM_ADD, NIF_MESSAGE | NIF_ICON | NIF_TIP)
                 return 0
         except Exception:  # noqa: BLE001 - an error must not escape into Windows' callback
-            log.warning("Erro no ícone da área de notificação", exc_info=True)
+            log.warning(t("tray.icon_error"), exc_info=True)
             return 0
         return api.user32.DefWindowProcW(hwnd, message, wparam, lparam)
 
     def _show_menu(self, api: Any) -> None:
         menu = api.user32.CreatePopupMenu()
         try:
-            for action, text in MENU:
+            for action, key in MENU:
                 if action is None:
                     api.user32.AppendMenuW(menu, MF_SEPARATOR, 0, None)
                     continue
                 grayed = action == BACKUP and not self.backup_enabled
                 flags = MF_STRING | (MF_GRAYED if grayed else 0)
-                api.user32.AppendMenuW(menu, flags, MENU_IDS[action], text)
+                api.user32.AppendMenuW(menu, flags, MENU_IDS[action], t(key))
             api.user32.SetMenuDefaultItem(menu, MENU_IDS[OPEN], False)
             point = api.POINT()
             api.user32.GetCursorPos(api.byref(point))

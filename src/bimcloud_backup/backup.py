@@ -51,6 +51,7 @@ from bimcloud_backup.failures import (
     first_line,
     reason,
 )
+from bimcloud_backup.i18n import format_count, format_decimal, plural, t
 from bimcloud_backup.redaction import redact
 from bimcloud_backup.retention import (
     backup_folder_name,
@@ -151,7 +152,7 @@ class Progress:
     files_total: int = 0
     bytes_done: int = 0
     bytes_total: int = 0
-    # What BIMcloud is doing with that export: "na fila do BIMcloud (2 min)".
+    # What BIMcloud is doing with that export: "queued on BIMcloud (2 min)".
     detail: str | None = None
 
 
@@ -188,17 +189,18 @@ class _ProgressTracker:
             self._send()
         parts = []
         if exports:
-            parts.append(f"{format_count(exports)} projetos e bibliotecas")
+            parts.append(plural("backup.to_copy.exports", exports))
         if files:
-            parts.append(f"{format_count(files)} arquivos ({format_size(size)})")
-        log.info("Para copiar: %s", " e ".join(parts) if parts else "nada")
+            parts.append(plural("backup.to_copy.files", files, size=format_size(size)))
+        what = t("backup.to_copy.and").join(parts) if parts else t("backup.to_copy.nothing")
+        log.info(t("backup.to_copy", what=what))
 
     def export_started(self, kind_label: str, path: str) -> None:
         with self._lock:
             self.state = replace(self.state, current=path)
             number, total = self.state.exports_done + 1, self.state.exports_total
             self._send()
-        log.info("%s %d de %d: %s", kind_label, number, total, path)
+        log.info(t("backup.export_started", kind=kind_label, number=number, total=total, path=path))
 
     def export_finished(self) -> None:
         with self._lock:
@@ -226,11 +228,13 @@ class _ProgressTracker:
             if milestone > self._milestone and s.files_total >= FILE_MILESTONES:
                 self._milestone = milestone
                 log.info(
-                    "Arquivos: %s de %s (%s de %s)",
-                    format_count(s.files_done),
-                    format_count(s.files_total),
-                    format_size(s.bytes_done),
-                    format_size(s.bytes_total),
+                    t(
+                        "backup.files_progress",
+                        done=format_count(s.files_done),
+                        total=format_count(s.files_total),
+                        bytes_done=format_size(s.bytes_done),
+                        bytes_total=format_size(s.bytes_total),
+                    )
                 )
 
     def _send(self) -> None:
@@ -301,7 +305,7 @@ class _Run:
     def worker_check(self) -> None:
         """The limits check used inside downloads, which also stops them when the run stops."""
         if self.stop.is_set():
-            raise BackupAborted("Backup interrompido")
+            raise BackupAborted(t("backup.interrupted"))
         self.check()
 
 
@@ -326,9 +330,9 @@ def log_failure(failure: Failure) -> None:
 
     The technical line is marked so the window leaves it out; the log file keeps it.
     """
-    log.error("Falha: %s", explain(failure))
+    log.error(t("backup.failure", text=explain(failure)))
     if reason(failure.message) or first_line(failure.message) != failure.message.strip():
-        log.info("Detalhe técnico: %s", failure.text, extra={"technical": True})
+        log.info(t("backup.technical_detail", text=failure.text), extra={"technical": True})
 
 
 def _failure_kind(resource_type: object) -> str:
@@ -394,10 +398,11 @@ class LocalPaths:
         self._used.add(_path_key(candidate))
         if candidate.name != name:
             log.warning(
-                "Nome repetido no Windows (maiúsculas/minúsculas ou nome reservado): %s gravado "
-                "como %s",
-                (parent / name).as_posix(),
-                candidate.as_posix(),
+                t(
+                    "backup.renamed",
+                    name=(parent / name).as_posix(),
+                    saved_as=candidate.as_posix(),
+                )
             )
         return candidate
 
@@ -461,17 +466,17 @@ def _run(
 
     def check_limits() -> None:
         if cancel is not None and cancel.is_set():
-            raise BackupCancelled("Backup cancelado")
+            raise BackupCancelled(t("backup.cancelled"))
         if config.max_duration_hours and monotonic() - started > config.max_duration_hours * 3600:
-            raise BackupAborted(f"Tempo máximo de {config.max_duration_hours} h atingido")
+            raise BackupAborted(t("backup.time_limit", hours=config.max_duration_hours))
         if config.min_free_space_gb and free_space(root_dir) < config.min_free_space_gb * GB:
-            raise BackupAborted(
-                f"Espaço livre abaixo de {config.min_free_space_gb} GB em {root_dir}"
-            )
+            raise BackupAborted(t("backup.low_space", gb=config.min_free_space_gb, folder=root_dir))
 
     check_limits()
     if not 1 <= config.parallel_downloads <= MAX_PARALLEL_DOWNLOADS:
-        raise BimcloudError(f"parallel_downloads deve estar entre 1 e {MAX_PARALLEL_DOWNLOADS}")
+        raise BimcloudError(
+            t("config.between", name="parallel_downloads", low=1, high=MAX_PARALLEL_DOWNLOADS)
+        )
     sources = _resolve_sources(client, config.selection, check_limits)
     check_limits()
     source_paths = sources.manifest_paths
@@ -494,7 +499,7 @@ def _run(
         progress=_ProgressTracker(progress),
     )
     interrupt = _DeferredInterrupt()
-    log.info("Backup iniciado: %s -> %s", ", ".join(source_paths), root_dir / name)
+    log.info(t("backup.started", sources=", ".join(source_paths), folder=root_dir / name))
     for path, kind, message in sources.missing:
         failure = Failure(f"{sources.root_path}/{path}", kind, message)
         log_failure(failure)
@@ -537,7 +542,7 @@ def _run(
         # Last chance to cancel: from here on the backup is made final and old ones are
         # removed, and none of that is interrupted any more.
         if cancel is not None and cancel.is_set():
-            raise BackupCancelled("Backup cancelado")
+            raise BackupCancelled(t("backup.cancelled"))
         interrupt.defer()
         save_manifest(
             BackupManifest(
@@ -565,22 +570,21 @@ def _run(
 
     try:
         log.info(
-            "Backup concluído: %s arquivos, %s em %s",
-            format_count(result.files),
-            format_size(result.bytes),
-            result.folder,
+            t(
+                "backup.finished",
+                files=format_count(result.files),
+                size=format_size(result.bytes),
+                folder=result.folder,
+            )
         )
         if result.errors:
-            log.warning(
-                '%s (veja as linhas "Falha" acima); a limpeza de backups antigos foi pulada',
-                count_failed(len(result.errors)),
-            )
+            log.warning(t("backup.retention_skipped", failed=count_failed(len(result.errors))))
         else:
             result.removed = _apply_retention(config, now)
     finally:
         interrupt.restore()
     if interrupt.received:
-        log.warning("Ctrl+C recebido durante a finalização; o backup foi concluído normalmente")
+        log.warning(t("backup.late_interrupt"))
     return result
 
 
@@ -645,20 +649,16 @@ def _warn_about_running_exports(exporter: ProjectExporter) -> None:
     try:
         running = exporter.running_exports()
     except (BimcloudError, OSError) as e:
-        log.debug("Não foi possível consultar as exportações em andamento: %s", redact(str(e)))
+        log.debug(t("backup.running_exports_unknown", error=redact(str(e))))
         return
     if running:
-        log.warning(
-            "Já há %d %s no BIMcloud; as exportações deste backup podem esperar na fila",
-            running,
-            "exportação sua em andamento" if running == 1 else "exportações suas em andamento",
-        )
+        log.warning(plural("backup.running_exports", running))
 
 
 def _handle_counted(resource: dict[str, Any], run: _Run) -> None:
     """Handle one resource and count it as done, even when it fails or is skipped."""
     if _exported(resource, run):
-        label = "Projeto" if resource.get("type") in PROJECT_TYPES else "Biblioteca"
+        label = t("kind.project" if resource.get("type") in PROJECT_TYPES else "kind.library")
         run.progress.export_started(label, resource.get("$path", resource.get("name", "?")))
         _handle(resource, run)
         run.progress.export_finished()
@@ -685,7 +685,7 @@ def _handle(resource: dict[str, Any], run: _Run) -> None:
             # into the folder that holds them.
             target = work / run.paths.parent_of(path)
     except ValueError as e:
-        run.add(_Outcome.failed(path, _failure_kind(kind), f"caminho ignorado: {e}"))
+        run.add(_Outcome.failed(path, _failure_kind(kind), t("backup.path_ignored", reason=e)))
         return
 
     if kind == FOLDER_TYPE:
@@ -705,7 +705,7 @@ def _handle(resource: dict[str, Any], run: _Run) -> None:
         exporter = run.exporter
         if exporter is None:
             result.pending.append(path)
-            log.warning("Exportação indisponível (%s): %s", kind, path)
+            log.warning(t("backup.export_unavailable", kind=kind, path=path))
         elif kind in PROJECT_TYPES:
             _save_project(resource, path, target, exporter, run)
         else:
@@ -718,7 +718,7 @@ def _handle(resource: dict[str, Any], run: _Run) -> None:
                 run,
             )
     else:
-        log.debug("Tipo %s ignorado: %s", kind, path)
+        log.debug(t("backup.type_ignored", kind=kind, path=path))
 
 
 def _save_project(
@@ -732,12 +732,10 @@ def _save_project(
         resource, path, folder, exporter, run
     ):
         if fmt == PROJECTS_PLN:
-            log.warning(
-                "Nenhum .pln pronto no BIMcloud para %s; exportando o .BIMProject no lugar", path
-            )
+            log.warning(t("backup.no_pln_export", path=path))
             export = True
         else:
-            log.warning("Nenhum .pln pronto no BIMcloud para %s", path)
+            log.warning(t("backup.no_pln", path=path))
     if export:
         _record_export(
             path,
@@ -758,7 +756,7 @@ def _save_latest_pln(
     except BackupAborted:
         raise
     except (BimcloudError, OSError) as e:
-        run.add(_Outcome.failed(path, KIND_PROJECT, f"falha ao listar os backups do servidor: {e}"))
+        run.add(_Outcome.failed(path, KIND_PROJECT, t("backup.server_backups_failed", error=e)))
         return False
     if backup is None:
         return False
@@ -782,7 +780,7 @@ def _save_latest_pln(
             size = source.download(metadata, target, run.check)
         return ExportedFile(target, size)
 
-    log.info("Baixando o .pln mais recente de %s", path)
+    log.info(t("backup.downloading_pln", path=path))
     _record_export(path, KIND_PLN, download, run, modified_date=backup["$time"])
     return True
 
@@ -830,7 +828,7 @@ def _record_export(
     relative = exported.path.relative_to(run.work).as_posix()
     file = ManifestFile(relative, exported.size, modified_date, kind)
     run.add(_Outcome(file=file, kind=kind))
-    log.info("Salvo %s (%.1f MB)", relative, exported.size / 1024**2)
+    log.info(t("backup.saved", path=relative, size=format_decimal(exported.size / 1024**2)))
 
 
 def _download_blob(
@@ -854,7 +852,7 @@ def _download_blob(
         raise
     except (BimcloudError, OSError) as e:
         return _Outcome.failed(path, KIND_FILE, str(e))
-    log.debug("Incluído no backup %s (%d bytes)", path, size)
+    log.debug(t("backup.included", path=path, size=size))
     return _Outcome(
         file=ManifestFile(manifest_path, size, _modified_date(resource)), kind=BLOB_TYPE
     )
@@ -903,7 +901,7 @@ def _reject_reserved_manifest_path(
 ) -> bool:
     if relative.parts[0].casefold() not in RESERVED_MANIFEST_NAMES:
         return False
-    message = "caminho ignorado: nome reservado para os metadados do backup"
+    message = t("backup.path_ignored", reason=t("backup.reserved_name"))
     run.add(_Outcome.failed(resource_path, kind, message))
     return True
 
@@ -916,10 +914,10 @@ def _incremental_base(
         return None, {}
     manifest = load_manifest(folder)
     if manifest is None:
-        log.warning("Manifest ausente ou inválido no backup anterior: %s", folder)
+        log.warning(t("backup.previous_manifest_invalid", folder=folder))
         return None, {}
     if manifest.server_url != server_url or manifest.source_path != source_path:
-        log.info("A origem do backup anterior é diferente; fazendo download completo")
+        log.info(t("backup.previous_source_differs"))
         return None, {}
     return folder, {item.path: item for item in manifest.files}
 
@@ -934,38 +932,29 @@ def _reuse_file(
     target.parent.mkdir(parents=True, exist_ok=True)
     try:
         if source.stat().st_size != resource["$size"]:
-            raise OSError("tamanho local diferente do manifest")
+            raise OSError("local size differs from the manifest")
     except OSError as source_error:
-        log.warning(
-            "Arquivo anterior indisponível para %s (%s); baixando novamente",
-            target,
-            source_error,
-        )
+        log.warning(t("backup.previous_file_unavailable", path=target, error=source_error))
         return downloader.download(resource, target, check)
     try:
         os.link(source, target)
-        log.debug("Hardlink criado para arquivo inalterado: %s", target)
+        log.debug(t("backup.hardlinked", path=target))
         return resource["$size"]
     except OSError as link_error:
-        log.warning("Hardlink indisponível para %s (%s); tentando copiar", target, link_error)
+        log.warning(t("backup.hardlink_failed", path=target, error=link_error))
     try:
         shutil.copy2(source, target)
-        log.debug("Arquivo inalterado copiado localmente: %s", target)
+        log.debug(t("backup.copied_locally", path=target))
         return resource["$size"]
     except OSError as copy_error:
-        log.warning("Cópia local falhou para %s (%s); baixando novamente", target, copy_error)
+        log.warning(t("backup.local_copy_failed", path=target, error=copy_error))
         return downloader.download(resource, target, check)
 
 
-def format_count(count: int) -> str:
-    """1284 -> "1.284", as the interface shows it."""
-    return f"{count:,}".replace(",", ".")
-
-
 def format_size(size: int) -> str:
-    """Bytes as the interface shows them: "18,6 GB", "512,0 MB"."""
+    """Bytes as the interface shows them: "18.6 GB", "512.0 MB" ("18,6 GB" in Portuguese)."""
     value, unit = (size / 1024**3, "GB") if size >= 1024**3 else (size / 1024**2, "MB")
-    return f"{value:.1f}".replace(".", ",") + f" {unit}"
+    return f"{format_decimal(value)} {unit}"
 
 
 def _count_resource(result: BackupResult, kind: str, resource: dict[str, Any]) -> None:
@@ -997,26 +986,26 @@ class _Sources:
         return sorted(paths)
 
 
-# How the type of a resource is named in messages: "não é mais uma pasta (agora é projeto)".
-TYPE_NAMES = {FOLDER_TYPE: ("pasta", "uma"), BLOB_TYPE: ("arquivo", "um")}
-TYPE_NAMES.update(dict.fromkeys(PROJECT_TYPES, ("projeto", "um")))
-TYPE_NAMES.update(dict.fromkeys(LIBRARY_TYPES, ("biblioteca", "uma")))
+# How the type of a resource is named in messages: "is no longer a folder (now a project)".
+TYPE_KEYS = {FOLDER_TYPE: "folder", BLOB_TYPE: "file"}
+TYPE_KEYS.update(dict.fromkeys(PROJECT_TYPES, "project"))
+TYPE_KEYS.update(dict.fromkeys(LIBRARY_TYPES, "library"))
 
 
 def _switched_off(resource: dict[str, Any], config: Config) -> str | None:
     """Why a chosen project or library will not be copied, when its kind is switched off."""
     kind = resource.get("type")
     if kind in PROJECT_TYPES and not config.include_projects:
-        return "projeto marcado, mas Projetos está desligado"
+        return t("backup.projects_off")
     if kind in LIBRARY_TYPES and not config.include_libraries:
-        return "biblioteca marcada, mas Bibliotecas está desligado"
+        return t("backup.libraries_off")
     return None
 
 
 def _wrong_type(expected: str, found: dict[str, Any]) -> str:
-    name, article = TYPE_NAMES.get(expected, ("item", "um"))
-    now = TYPE_NAMES.get(found.get("type"), ("outro tipo", ""))[0]
-    return f"não é mais {article} {name} no BIMcloud (agora é {now})"
+    was = t(f"backup.no_longer.{TYPE_KEYS.get(expected, 'item')}")
+    now = t(f"backup.type.{TYPE_KEYS.get(found.get('type'), 'other')}")
+    return t("backup.wrong_type", was=was, now=now)
 
 
 def _resolve_sources(
@@ -1029,18 +1018,9 @@ def _resolve_sources(
         return _Sources(root_path, [(ROOT_ID, root_path)], [])
     sources = _Sources(root_path, [], [])
     wanted = [
-        *(
-            (folder, (FOLDER_TYPE,), "pasta de origem não encontrada no BIMcloud")
-            for folder in selection.folders
-        ),
-        *(
-            (project, PROJECT_TYPES, "projeto não encontrado no BIMcloud")
-            for project in selection.projects
-        ),
-        *(
-            (library, LIBRARY_TYPES, "biblioteca não encontrada no BIMcloud")
-            for library in selection.libraries
-        ),
+        *((folder, (FOLDER_TYPE,), t("backup.missing_folder")) for folder in selection.folders),
+        *((project, PROJECT_TYPES, t("backup.missing_project")) for project in selection.projects),
+        *((library, LIBRARY_TYPES, t("backup.missing_library")) for library in selection.libraries),
     ]
     for relative, types, missing in wanted:
         kind = _failure_kind(next(iter(types)))
@@ -1071,9 +1051,9 @@ def _clean_component(part: str) -> str:
     # Windows silently drops trailing dots and spaces.
     clean = part.strip().rstrip(".")
     if not clean or clean in (".", ".."):
-        raise ValueError("nome inválido")
+        raise ValueError(t("backup.invalid_name"))
     if any(c in clean for c in '<>:"\\|?*') or any(ord(c) < 32 for c in clean):
-        raise ValueError("caracteres inválidos no nome")
+        raise ValueError(t("backup.invalid_characters"))
     return avoid_reserved_name(clean)
 
 
@@ -1091,7 +1071,7 @@ def _exclusive_lock(path: Path) -> Iterator[None]:
         try:
             _lock_file(f)
         except OSError as e:
-            raise BackupAborted("Já existe um backup em andamento nesta pasta") from e
+            raise BackupAborted(t("backup.already_running")) from e
         yield
     finally:
         f.close()
@@ -1112,7 +1092,7 @@ def _remove_leftovers(root_dir: Path) -> None:
     """Delete incomplete folders left behind by a run that was killed."""
     for entry in root_dir.glob(f"{INCOMPLETE_PREFIX}*"):
         if entry.is_dir():
-            log.info("Removendo backup incompleto anterior: %s", entry.name)
+            log.info(t("backup.removing_incomplete", name=entry.name))
             shutil.rmtree(entry, ignore_errors=True)
 
 
@@ -1124,6 +1104,6 @@ def _apply_retention(config: Config, now: datetime) -> list[Path]:
             config.backup_dir, config.retention_days, config.min_backups_to_keep, now
         )
     if expired:
-        log.info("Removendo %d backups antigos", len(expired))
+        log.info(plural("backup.removing_old", len(expired)))
         delete_backups(expired)
     return expired

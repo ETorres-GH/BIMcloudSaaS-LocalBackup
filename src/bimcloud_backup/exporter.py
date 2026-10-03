@@ -18,6 +18,7 @@ import requests
 from bimcloud_backup.blobserver import candidate_urls
 from bimcloud_backup.client import ManagerClient
 from bimcloud_backup.errors import ApiError, BimcloudError
+from bimcloud_backup.i18n import t
 from bimcloud_backup.redaction import redact
 from bimcloud_backup.urls import https_origin, is_trusted_host
 
@@ -167,7 +168,7 @@ class Exporter:
             if len(page) < BACKUP_PAGE_SIZE:
                 break
         else:
-            log.warning("Lista de backups do servidor truncada em %d páginas", MAX_BACKUP_PAGES)
+            log.warning(t("export.backups_truncated", pages=MAX_BACKUP_PAGES))
         return max(ready, key=lambda b: b["$time"], default=None)
 
     def download_backup(
@@ -203,24 +204,22 @@ class Exporter:
         job = self._call("GET", endpoint, params=params)
         job_id = job.get("id") if isinstance(job, dict) else None
         if not job_id:
-            raise ExportError("O BIMcloud não iniciou a exportação")
+            raise ExportError(t("export.not_started"))
         job = self._wait(job_id, check)
         url = _job_property(job, "absoluteUrl")
         if not url:
-            raise ExportError("A exportação terminou sem o endereço do arquivo")
+            raise ExportError(t("export.no_url"))
         name = file_name_from_url(url)
         if not extension.search(name):
-            raise ExportError(f"O BIMcloud devolveu um arquivo inesperado: {name}")
+            raise ExportError(t("export.unexpected_file", name=name))
         # The download carries the access token, so it only goes to a BIMcloud address.
         data = job.get("data") if isinstance(job.get("data"), dict) else {}
         trusted = self._trust(data.get("modelServerId") or _job_property(job, "modelServerId"))
         origin = https_origin(url)
         if origin is None:
-            raise ExportError("Endereço de download recusado: não usa https")
+            raise ExportError(t("export.url_not_https"))
         if not trusted(url):
-            raise ExportError(
-                f"Endereço de download recusado: {origin[0]} não pertence ao BIMcloud"
-            )
+            raise ExportError(t("export.url_not_bimcloud", host=origin[0]))
         target = folder / name
         size = self._download(url, None, target, check, trusted=trusted)
         return ExportedFile(target, size)
@@ -249,7 +248,7 @@ class Exporter:
         try:
             server = self._client.get_resource(server_id)
         except (BimcloudError, requests.RequestException) as e:
-            log.warning("Não foi possível consultar o servidor de dados: %s", redact(str(e)))
+            log.warning(t("export.data_server_failed", error=redact(str(e))))
             return set()
         manager = urlparse(self._client.server_url)
         urls = candidate_urls(server or {}, manager.scheme, manager.hostname or "")
@@ -266,13 +265,10 @@ class Exporter:
                 now = self._monotonic()
                 if now - watcher.started > self._job_timeout_seconds:
                     minutes = self._job_timeout_seconds / 60
-                    raise ExportError(f"A exportação não terminou em {minutes:.0f} minutos")
+                    raise ExportError(t("export.timeout", minutes=f"{minutes:.0f}"))
                 if now - watcher.changed > self._stall_seconds:
                     minutes = self._stall_seconds / 60
-                    raise ExportError(
-                        f"A exportação ficou {minutes:.0f} minutos parada no BIMcloud, sem "
-                        "nenhum avanço"
-                    )
+                    raise ExportError(t("export.stalled", minutes=f"{minutes:.0f}"))
                 self._sleep(self._poll_seconds)
                 job = self._get_job(job_id)
                 status = job.get("status") if job else None
@@ -281,7 +277,7 @@ class Exporter:
                     if status == JOB_COMPLETED:
                         return job
                     detail = job.get("result")
-                    message = f"A exportação terminou com status {status!r}"
+                    message = t("export.final_status", status=repr(status))
                     raise ExportError(f"{message}: {detail}" if detail else message)
                 self._report(watcher.update(job, self._monotonic()))
         except BaseException:
@@ -298,15 +294,12 @@ class Exporter:
                 "POST", PUBLIC_ABORT_JOB, api_root=PUBLIC_ROOT, params={"job-id": job_id}
             )
         except BimcloudError as e:
-            log.warning("Não foi possível interromper a exportação no BIMcloud: %s", e)
+            log.warning(t("export.abort_failed", error=e))
             return
         if aborted is True:
-            log.info("Exportação interrompida no BIMcloud")
+            log.info(t("export.aborted"))
         else:
-            log.warning(
-                "O BIMcloud não interrompeu a exportação; ela pode continuar rodando lá por "
-                "algum tempo"
-            )
+            log.warning(t("export.not_aborted"))
 
     def _get_job(self, job_id: str) -> dict[str, Any] | None:
         """The job, or None while BIMcloud does not list it yet.
@@ -319,7 +312,7 @@ class Exporter:
             except ApiError as e:
                 if e.status != 404:
                     raise
-                log.info("get-jobs-by-criterion indisponível; usando get-job")
+                log.info("get-jobs-by-criterion not available; using get-job")
                 self._public_get_job = True
             else:
                 return next((j for j in jobs or [] if j.get("id") == job_id), None)
@@ -329,7 +322,7 @@ class Exporter:
         try:
             return self._client.request(method, endpoint, api_root=api_root, **kwargs)
         except requests.RequestException as e:
-            raise ExportError(f"Falha de conexão com o BIMcloud: {redact(str(e))}") from None
+            raise ExportError(t("export.connection_failed", error=redact(str(e)))) from None
 
     # -------------------------------------------------------------- download
 
@@ -345,18 +338,20 @@ class Exporter:
         """Stream `url` to `target` through a temporary `.part` file renamed at the end."""
         target.parent.mkdir(parents=True, exist_ok=True)
         if target.exists():
-            raise ExportError(f"Já existe um arquivo com o nome {target.name}")
+            raise ExportError(t("export.file_exists", name=target.name))
         partial = target.with_name(target.name + ".part")
         try:
             written = self._stream(url, params, partial, check, trusted)
             if isinstance(expected, int) and expected >= 0 and written != expected:
                 raise ExportError(
-                    f"Download incompleto de {target.name}: {written} de {expected} bytes"
+                    t("download.incomplete_file", name=target.name, written=written, total=expected)
                 )
             partial.replace(target)
         except requests.RequestException as e:
             partial.unlink(missing_ok=True)
-            raise ExportError(f"Falha ao baixar {target.name}: {redact(str(e))}") from None
+            raise ExportError(
+                t("export.download_failed", name=target.name, error=redact(str(e)))
+            ) from None
         except BaseException:
             partial.unlink(missing_ok=True)
             raise
@@ -382,7 +377,7 @@ class Exporter:
                     f.write(chunk)
                     written += len(chunk)
         if length and length.isdigit() and int(length) != written:
-            raise ExportError(f"Download incompleto: {written} de {length} bytes")
+            raise ExportError(t("download.incomplete", written=written, total=length))
         return written
 
 
@@ -412,33 +407,33 @@ class _JobWatcher:
                 self.changed = now
             self._key = key
             self._logged = now
-            log.info("Exportação: %s", describe_job(job, elapsed))
+            log.info(t("export.status", text=describe_job(job, elapsed)))
         return describe_job(job, elapsed, short=True)
 
 
 def describe_job(job: dict[str, Any] | None, elapsed: float, short: bool = False) -> str:
-    """What the job is doing: 'o BIMcloud está preparando o arquivo (etapa 1 de 3, 2 min)' for
-    the log, or (`short`) 'preparando, etapa 1 de 3 · 2 min', which fits one line of the window."""
+    """What the job is doing: 'BIMcloud is preparing the file (step 1 of 3, 2 min)' for the
+    log, or (`short`) 'preparing, step 1 of 3 · 2 min', which fits one line of the window."""
     status = job.get("status") if job else None
     if status in (None, "starting"):
-        state = ("na fila", "na fila do BIMcloud")
+        state = "queued"
     elif status == "aborting":
-        state = ("interrompendo", "o BIMcloud está interrompendo a exportação")
+        state = "aborting"
     else:
-        state = ("preparando", "o BIMcloud está preparando o arquivo")
+        state = "preparing"
     details = []
     progress = job.get("progress") if job else None
     if isinstance(progress, dict):
         current, top = progress.get("current"), progress.get("max")
         if isinstance(current, int) and isinstance(top, int) and top > 0 and status == "running":
-            details.append(f"etapa {min(current + 1, top)} de {top}")
+            details.append(t("export.step", number=min(current + 1, top), total=top))
         phase = progress.get("phase")
         if not short and isinstance(phase, str) and phase.strip():
             details.append(phase.strip())
-    minutes = "menos de 1 min" if elapsed < 60 else f"{int(elapsed // 60)} min"
+    minutes = t("export.under_a_minute") if elapsed < 60 else f"{int(elapsed // 60)} min"
     if short:
-        return " · ".join((", ".join((state[0], *details)), minutes))
-    return f"{state[1]} ({', '.join((*details, minutes))})"
+        return " · ".join((", ".join((t(f"export.short.{state}"), *details)), minutes))
+    return f"{t(f'export.long.{state}')} ({', '.join((*details, minutes))})"
 
 
 def _is_ready(backup: dict[str, Any], formats: Collection[str]) -> bool:
@@ -466,7 +461,7 @@ def file_name_from_url(url: str) -> str:
     """The `file-name` of an export download URL, made safe to use as a Windows file name."""
     names = parse_qs(urlparse(url).query).get("file-name")
     if not names:
-        raise ExportError("O endereço do arquivo exportado não informa o nome")
+        raise ExportError(t("export.url_without_name"))
     return safe_file_name(names[0])
 
 
@@ -475,7 +470,7 @@ def safe_file_name(name: str) -> str:
     name = re.split(r"[\\/]", name)[-1]
     name = re.sub(r'[<>:"|?*\x00-\x1f]', "_", name).strip().rstrip(". ")
     if not name or name in (".", ".."):
-        raise ExportError("Nome de arquivo inválido na resposta do BIMcloud")
+        raise ExportError(t("export.invalid_file_name"))
     return avoid_reserved_name(name)
 
 

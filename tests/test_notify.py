@@ -23,15 +23,15 @@ class FakeRun:
 def test_toast_texts_travel_in_the_environment_not_in_the_command():
     run = FakeRun()
 
-    notify.show(notify.FAILED, run=run)
+    notify.show(notify.failed(), run=run)
 
     command, kwargs = run.calls[0]
     assert command[0] == "powershell.exe" and "-EncodedCommand" in command
     assert kwargs["env"]["BCB_TOAST_TITLE"] == "BIMcloud Backup Local"
-    assert kwargs["env"]["BCB_TOAST_TEXT"] == notify.FAILED
+    assert kwargs["env"]["BCB_TOAST_TEXT"] == notify.failed()
     script = base64.b64decode(command[-1]).decode("utf-16-le")
     assert "$env:BCB_TOAST_TEXT" in script
-    assert notify.FAILED not in script and notify.FAILED not in " ".join(command)
+    assert notify.failed() not in script and notify.failed() not in " ".join(command)
     assert kwargs["creationflags"] == notify.NO_WINDOW
     assert kwargs["timeout"] == notify.TIMEOUT_SECONDS
 
@@ -47,7 +47,7 @@ def test_toast_texts_travel_in_the_environment_not_in_the_command():
 def test_a_toast_that_cannot_be_shown_never_breaks_the_backup(run, caplog):
     caplog.set_level(logging.WARNING, logger="bimcloud_backup")
 
-    notify.show(notify.FAILED, run=run)
+    notify.show(notify.failed(), run=run)
 
     assert "Não foi possível mostrar o aviso do Windows" in caplog.text
 
@@ -55,9 +55,9 @@ def test_a_toast_that_cannot_be_shown_never_breaks_the_backup(run, caplog):
 @pytest.mark.parametrize(
     "message",
     [
-        notify.FAILED,
-        notify.CANCELLED,
-        notify.AUTH_EXPIRED,
+        notify.failed(),
+        notify.cancelled(),
+        notify.auth_expired(),
         notify.finished_with_errors(1),
         notify.finished_with_errors(12),
     ],

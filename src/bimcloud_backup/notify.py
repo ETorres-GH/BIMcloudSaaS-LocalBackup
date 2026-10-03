@@ -11,17 +11,25 @@ import os
 import subprocess
 from collections.abc import Callable
 
-APP_NAME = "BIMcloud Backup Local"
-SEE_DETAILS = "Abra o BIMcloud Backup Local para ver detalhes."
+from bimcloud_backup.i18n import plural, t
 
-FAILED = "O backup automático falhou. " + SEE_DETAILS
-CANCELLED = "O backup automático foi cancelado. " + SEE_DETAILS
-AUTH_EXPIRED = "O acesso ao BIMcloud expirou. Abra o BIMcloud Backup Local e entre novamente."
+APP_NAME = "BIMcloud Backup Local"
+
+
+def failed() -> str:
+    return t("notify.failed")
+
+
+def cancelled() -> str:
+    return t("notify.cancelled")
+
+
+def auth_expired() -> str:
+    return t("notify.auth_expired")
 
 
 def finished_with_errors(errors: int) -> str:
-    failed = "1 item falhou" if errors == 1 else f"{errors} itens falharam"
-    return f"O backup automático terminou, mas {failed}. {SEE_DETAILS}"
+    return plural("notify.finished_with_errors", errors)
 
 
 # Windows only shows toasts from registered apps; PowerShell's ID is always registered.
@@ -80,7 +88,7 @@ def show(message: str, run: Callable[..., subprocess.CompletedProcess] = subproc
             creationflags=NO_WINDOW,
         )
     except (OSError, subprocess.SubprocessError) as e:
-        log.warning("Não foi possível mostrar o aviso do Windows (%s)", type(e).__name__)
+        log.warning(t("notify.show_failed", error=type(e).__name__))
         return
     if result.returncode != 0:
-        log.warning("Não foi possível mostrar o aviso do Windows (código %d)", result.returncode)
+        log.warning(t("notify.show_failed_code", code=result.returncode))

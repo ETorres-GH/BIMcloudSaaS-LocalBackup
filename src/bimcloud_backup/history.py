@@ -16,8 +16,10 @@ STATUS_WARNINGS = "warnings"
 STATUS_NO_DETAILS = "no_details"
 STATUS_INCOMPLETE = "incomplete"
 
-# File kinds in the manifest and how the interface names them.
+# File kinds in the manifest and how the interface names them. Plain files are counted as
+# FILES, which the interface names in the chosen language.
 KIND_LABELS = {"bimproject": ".BIMProject", "pln": ".pln", "bimlibrary": ".BIMLibrary"}
+FILES = "files"
 
 
 @dataclass(frozen=True)
@@ -27,7 +29,7 @@ class HistoryEntry:
     status: str
     size: int | None = None
     files: int | None = None
-    # Exported or downloaded files per kind: ".BIMProject", ".pln", ".BIMLibrary", "arquivos".
+    # Exported or downloaded files per kind: ".BIMProject", ".pln", ".BIMLibrary" or FILES.
     counts: tuple[tuple[str, int], ...] = ()
     errors: int = 0
 
@@ -70,8 +72,8 @@ def _completed(
 
 
 def summarise(folder: Path, created: datetime, manifest: BackupManifest) -> HistoryEntry:
-    kinds = Counter(KIND_LABELS.get(f.kind or "", "arquivos") for f in manifest.files)
-    order = [*KIND_LABELS.values(), "arquivos"]
+    kinds = Counter(KIND_LABELS.get(f.kind or "", FILES) for f in manifest.files)
+    order = [*KIND_LABELS.values(), FILES]
     counts = tuple((label, kinds[label]) for label in order if kinds[label])
     return HistoryEntry(
         folder,

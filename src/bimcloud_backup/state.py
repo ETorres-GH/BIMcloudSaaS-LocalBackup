@@ -56,7 +56,7 @@ class ManifestFile:
     @classmethod
     def from_dict(cls, data: object) -> ManifestFile:
         if not isinstance(data, dict):
-            raise TypeError("entrada de arquivo inválida")
+            raise TypeError("invalid file entry")
         path = data.get("path")
         size = data.get("$size")
         modified_date = data.get("$modifiedDate")
@@ -71,7 +71,7 @@ class ManifestFile:
                 and (not isinstance(modified_date, int) or isinstance(modified_date, bool))
             )
         ):
-            raise TypeError("metadados de arquivo inválidos")
+            raise TypeError("invalid file metadata")
         manifest_path = PurePosixPath(path)
         if (
             not path
@@ -80,7 +80,7 @@ class ManifestFile:
             or ":" in path
             or "\\" in path
         ):
-            raise ValueError("caminho de arquivo inválido")
+            raise ValueError("invalid file path")
         return cls(path, size, modified_date, kind)
 
 
@@ -121,7 +121,7 @@ class BackupManifest:
     @classmethod
     def from_dict(cls, data: object) -> BackupManifest:
         if not isinstance(data, dict):
-            raise TypeError("manifest inválido")
+            raise TypeError("invalid manifest")
         created_at = data.get("created_at")
         version = data.get("version")
         server_url = data.get("server_url")
@@ -139,17 +139,17 @@ class BackupManifest:
             or not isinstance(source_path, list)
             or not all(isinstance(p, str) for p in source_path)
         ):
-            raise TypeError("cabeçalho do manifest inválido")
+            raise TypeError("invalid manifest header")
         if (
             not isinstance(by_type, dict)
             or not isinstance(files, list)
             or not isinstance(errors, list)
         ):
-            raise TypeError("conteúdo do manifest inválido")
+            raise TypeError("invalid manifest content")
         normalized_types: dict[str, dict[str, int]] = {}
         for kind, totals in by_type.items():
             if not isinstance(kind, str) or not isinstance(totals, dict):
-                raise TypeError("totais do manifest inválidos")
+                raise TypeError("invalid manifest totals")
             count, size = totals.get("count"), totals.get("bytes")
             if (
                 not isinstance(count, int)
@@ -157,10 +157,10 @@ class BackupManifest:
                 or not isinstance(size, int)
                 or isinstance(size, bool)
             ):
-                raise TypeError("totais do manifest inválidos")
+                raise TypeError("invalid manifest totals")
             normalized_types[kind] = {"count": count, "bytes": size}
         if not all(isinstance(error, str) for error in errors):
-            raise TypeError("erros do manifest inválidos")
+            raise TypeError("invalid manifest errors")
         manifest = cls(
             created_at,
             version,

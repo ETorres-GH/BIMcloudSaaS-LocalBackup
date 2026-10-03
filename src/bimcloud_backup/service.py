@@ -27,6 +27,7 @@ from bimcloud_backup.client import FOLDER_TYPE, ROOT_ID, ManagerClient
 from bimcloud_backup.config import Config
 from bimcloud_backup.errors import ApiError, AuthError, BimcloudError
 from bimcloud_backup.exporter import Exporter
+from bimcloud_backup.i18n import t
 from bimcloud_backup.redaction import redact
 from bimcloud_backup.state import (
     STATUS_CANCELLED,
@@ -60,7 +61,7 @@ def sign_in(
 def connect(session: requests.Session, config: Config, store: TokenStore) -> ManagerClient:
     refresh_token = store.load(config.server_url)
     if not refresh_token:
-        raise AuthError("nenhum acesso guardado neste computador")
+        raise AuthError(t("auth.no_stored_login"))
 
     def save(tokens: Tokens) -> None:
         try:
@@ -68,11 +69,7 @@ def connect(session: requests.Session, config: Config, store: TokenStore) -> Man
         except Exception as e:  # noqa: BLE001 - keyring backends raise many error types
             # The new token stays in memory, so this run goes on; only the next run may need a
             # new login. Only the error type is logged: a backend message may quote the token.
-            log.warning(
-                "Não foi possível guardar o acesso renovado no Gerenciador de Credenciais "
-                "(%s); o backup continua, mas pode ser preciso entrar de novo depois.",
-                type(e).__name__,
-            )
+            log.warning(t("auth.store_failed", error=type(e).__name__))
 
     # Refresh tokens may rotate, so every new one has to be persisted.
     tokens = refresh(session, config.server_url, config.client_id, refresh_token)
@@ -115,10 +112,10 @@ def backup_now(
             finally:
                 downloader.close()
     except BackupCancelled:
-        _record_cancelled("Cancelado pelo usuário")
+        _record_cancelled(t("service.cancelled_by_user"))
         raise
     except KeyboardInterrupt:
-        _record_cancelled("Cancelado com Ctrl+C")
+        _record_cancelled(t("service.cancelled_ctrl_c"))
         raise
     except (BimcloudError, requests.RequestException, OSError) as e:
         message = redact(str(e))
@@ -240,16 +237,13 @@ class FolderBrowser:
         else:
             wrong = [r for r in resources if not isinstance(r, dict) or r.get("type") not in kinds]
             if wrong:
-                problem = f"{len(wrong)} itens de outro tipo na resposta"
+                problem = t("service.listing_wrong_items", count=len(wrong))
             elif resources or not self._client.get_children(ROOT_ID):
                 return resources
             else:
                 # Nothing at all, but the root has something: the filter was not understood.
-                problem = "nenhum item na resposta, mas a raiz não está vazia"
-        log.warning(
-            "A listagem de uma vez não funcionou neste BIMcloud (%s); listando pasta a pasta",
-            problem,
-        )
+                problem = t("service.listing_empty")
+        log.warning(t("service.listing_fallback", problem=problem))
         return self._folder_by_folder(check)
 
     def _folder_by_folder(self, check: Callable[[], None]) -> list[dict[str, Any]]:
@@ -278,7 +272,7 @@ def open_folder_browser(
 
 
 def _record_cancelled(message: str) -> None:
-    log.warning("%s; nada desta execução foi mantido e nenhum backup antigo foi apagado", message)
+    log.warning(t("service.cancelled", message=message))
     _record(LastRun(_now(), STATUS_CANCELLED, message=message))
 
 

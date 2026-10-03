@@ -4,6 +4,7 @@ import threading
 import pytest
 
 from bimcloud_backup import tray
+from bimcloud_backup.i18n import t
 
 
 class FakeKey:
@@ -74,7 +75,7 @@ def test_startup_command_opens_only_the_icon(monkeypatch, tmp_path):
     exe = tmp_path / "Programa" / "BIMcloudBackup.exe"
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setattr(sys, "executable", str(exe))
-    assert tray.startup_command() == f'"{exe}" gui --bandeja'
+    assert tray.startup_command() == f'"{exe}" gui --tray'
 
 
 def test_startup_command_from_the_sources_uses_pythonw(monkeypatch, tmp_path):
@@ -82,13 +83,11 @@ def test_startup_command_from_the_sources_uses_pythonw(monkeypatch, tmp_path):
     (tmp_path / "pythonw.exe").write_bytes(b"")
     monkeypatch.delattr(sys, "frozen", raising=False)
     monkeypatch.setattr(sys, "executable", str(tmp_path / "python.exe"))
-    assert tray.startup_command() == (
-        f'"{tmp_path / "pythonw.exe"}" -m bimcloud_backup gui --bandeja'
-    )
+    assert tray.startup_command() == (f'"{tmp_path / "pythonw.exe"}" -m bimcloud_backup gui --tray')
 
 
 def test_menu_numbers_map_back_to_actions():
-    assert [text for _action, text in tray.MENU if text] == [
+    assert [t(key) for _action, key in tray.MENU if key] == [
         "Abrir",
         "Fazer backup agora",
         "Sair",
