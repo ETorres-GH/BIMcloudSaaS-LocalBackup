@@ -262,7 +262,7 @@
   "help.client_id": "O nome com que o programa se apresenta ao BIMcloud no login. Deixe como está.",
   "help.destination": "A pasta onde os backups ficam: um disco do computador, um disco externo ou uma pasta de rede. Para rodar sem ninguém conectado, use o caminho \\\\servidor\\pasta.",
   "help.every": "De quanto em quanto tempo o backup roda sozinho. Em dias, ele roda no horário de “às”; em minutos e horas, conta a partir da meia-noite.",
-  "help.history": "Cada backup fica numa pasta própria. As pastas mais antigas que esse número de dias são apagadas, mas sempre sobram pelo menos o mínimo de backups.",
+  "help.history": "Cada backup fica numa pasta própria. As pastas mais antigas que esse número de dias são apagadas, mas sempre sobra pelo menos o mínimo de backups.",
   "help.latest": "Cada backup que termina bem substitui o anterior. Ocupa menos espaço, mas não dá para voltar a uma versão mais antiga.",
   "help.logged_off": "Para servidores, onde ninguém fica conectado no Windows. Ao salvar, o programa pede a senha da sua conta do Windows e a entrega ao Agendador de Tarefas; o programa não a grava. Se trocar a senha, salve de novo.",
   "help.max_duration": "Se o backup passar desse tempo, ele para e o que foi copiado nessa vez é descartado; os backups anteriores continuam guardados. 0 = sem limite.",

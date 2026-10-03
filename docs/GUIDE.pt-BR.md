@@ -314,7 +314,7 @@ existe sem ninguém conectado. A conta precisa poder gravar no compartilhamento.
 login** (seção 3) e entre em qualquer navegador.
 
 **Avisos:** sem ninguém conectado, o aviso do Windows não aparece; o resultado fica no quadro
-"Último backup" e no log.
+**ÚLTIMO BACKUP** e no log.
 
 ### Server Core (sem interface gráfica)
 

@@ -96,12 +96,12 @@ In step **1. Connection to BIMcloud**:
 
 1. In **Address**, type the address you use in the browser to open BIMcloud Manager, starting
    with `https://`.
-2. **User (optional):** your BIMcloud e-mail, only to have it filled in on the login page.
+2. **Username (optional):** your BIMcloud email, only to have it filled in on the sign-in page.
 3. Click **Sign in to BIMcloud**. The browser opens the BIMcloud login page.
 4. Sign in as usual, two-step verification included, within 5 minutes.
 5. When it works, **"Signed in as <your user>"** shows up.
 
-If the browser does not open, click **The browser did not open? Copy the login address** and open
+If the browser does not open, click **Browser did not open? Copy the sign-in address** and open
 that address in any browser, even on another computer.
 
 Your password never goes through this program. The sign-in is kept in the Windows Credential
@@ -137,7 +137,7 @@ In **Projects as**, choose how each project is kept:
 | **PLN** | the latest `.pln` made by BIMcloud; if there is none, the `.BIMProject` | To open it straight in Archicad |
 | **Both** | the two | The safest option, if there is room |
 
-**Include BIMcloud's snapshots (backups)** in the `.BIMProject` or the `.BIMLibrary` also keeps
+**Include BIMcloud snapshots (backups) in** `.BIMProject` or `.BIMLibrary` also keeps
 the snapshots BIMcloud has of each item. The file becomes much larger.
 
 ## 6. Where to save, history and limits
@@ -160,9 +160,9 @@ window):
 - **Stop the backup after _X_ hours** or **if the disk has less than _Y_ GB free** (`0` = no
   limit).
 - **BIMcloud identifier (do not change):** only change it if support asks.
-- **Notify in Windows if the automatic backup fails:** on by default.
+- **Show a Windows notification if an automatic backup fails:** on by default.
 - **Detailed log:** turn it on only to look into a problem.
-- **Open with Windows, in the notification area:** off by default.
+- **Start with Windows, in the notification area:** off by default.
 
 ## 7. Automatic backup
 
@@ -178,8 +178,8 @@ In step **5. Automatic backup**:
 The panel on the left then shows "Next backup ...".
 
 - The backup runs through the Windows Task Scheduler, even with the program closed, while you are
-  signed in to Windows (the screen may be locked). On a server, check **Run even with nobody
-  signed in** (section 14).
+  signed in to Windows (the screen may be locked). On a server, check **Run even when nobody
+  is signed in** (section 14).
 - **Back up now** tests it right away. During the backup, the window shows the progress.
 - **Cancel backup** stops in a few seconds; what was copied in that run is discarded and no old
   backup is deleted.
@@ -241,10 +241,10 @@ technical messages** copies the text to send to whoever is helping you (section 
 | --- | --- |
 | BIMcloud could not create the file | Export the item in BIMcloud Manager. If it fails there too, talk to Graphisoft support |
 | The destination disk ran out of space | Free some space or choose another destination |
-| BIMcloud took too long to answer | Try later, at a quieter time |
+| BIMcloud took too long to respond | Try again later, at a quieter time |
 | The item no longer exists on BIMcloud | It was deleted, moved or renamed. Check the chosen folders |
-| The access to BIMcloud expired | Click **Sign in again** and repeat the backup |
-| The connection to BIMcloud dropped | Check the internet and repeat the backup |
+| Your BIMcloud access expired | Click **Sign in again** and repeat the backup |
+| The connection to BIMcloud dropped | Check your internet connection and repeat the backup |
 
 ## 10. Troubleshooting
 
@@ -252,7 +252,7 @@ technical messages** copies the text to send to whoever is helping you (section 
 | --- | --- |
 | **"Access expired: sign in again"** | Click **Sign in again**. The automatic backups work again right after |
 | **"No connection to BIMcloud"** | Check the internet and the **Address**; open the same address in the browser |
-| **"The login was not completed in 5 minutes."** | Click **Sign in to BIMcloud** again and finish the login in the browser |
+| **"Sign-in was not completed within 5 minutes."** | Click **Sign in to BIMcloud** again and complete the sign-in in the browser |
 | **"source folder not found on BIMcloud"** (or project, or library) | Something chosen was renamed, moved or deleted. Use **Choose...** and save again |
 | **"Free space below X GB on ..."** | Free some space, choose another destination or keep fewer days |
 | **"Time limit of X h reached"** | Raise the limit in **Advanced options**; the first backup is the slowest |
@@ -298,8 +298,8 @@ The program runs on Windows Server 2016, 2019, 2022 and 2025.
 
 1. Sign in to the server's Windows with the account that will make the backups and, in it, sign
    in to BIMcloud through the program (section 3).
-2. In step **5. Automatic backup**, turn on the switch and check **Run even with nobody signed
-   in**.
+2. In step **5. Automatic backup**, turn on the switch and check **Run even when nobody is
+   signed in**.
 3. Click **Save changes** and type the password of that Windows account. It stays with the
    Windows Task Scheduler, not with the program.
 
@@ -312,11 +312,11 @@ The program runs on Windows Server 2016, 2019, 2022 and 2025.
 **Destination on the network:** use the `\\server\backups` path, not a mapped letter (`Z:`),
 which does not exist with nobody signed in. The account must be able to write to the share.
 
-**Sign-in:** if the server's browser does not open the BIMcloud page, use **Copy the login
+**Sign-in:** if the server's browser does not open the BIMcloud page, use **Copy the sign-in
 address** (section 3) and sign in on any browser.
 
 **Notifications:** with nobody signed in, the Windows notification does not show; the result is
-in the "Last backup" panel and in the log.
+in the **LAST BACKUP** panel and in the log.
 
 ### Server Core (no graphical interface)
 
