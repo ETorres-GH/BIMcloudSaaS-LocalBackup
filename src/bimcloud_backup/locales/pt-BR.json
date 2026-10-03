@@ -134,6 +134,7 @@
   "cli.schedule.password": "Senha do Windows de {account} (não aparece na tela): ",
   "cli.schedule.removed": "Tarefa agendada removida.",
   "cli.scheduler_error": "Erro no Agendador de Tarefas: {error}",
+  "client.unexpected_listing": "O BIMcloud respondeu à listagem num formato inesperado",
   "config.at_least": "{name} deve ser pelo menos {minimum}",
   "config.between": "{name} deve estar entre {low} e {high}",
   "config.directory_empty": "backup.directory não pode ficar vazio",

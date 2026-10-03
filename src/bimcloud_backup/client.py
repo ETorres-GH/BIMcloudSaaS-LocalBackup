@@ -123,7 +123,7 @@ class ManagerClient:
                 json=criterion,
             )
             if not isinstance(page, list):
-                raise ApiError("O BIMcloud respondeu à listagem num formato inesperado")
+                raise ApiError(t("client.unexpected_listing"))
             found.extend(page)
             if len(page) < self._page_size:
                 return found

@@ -134,6 +134,7 @@
   "cli.schedule.password": "Windows password of {account} (not shown on screen): ",
   "cli.schedule.removed": "Scheduled task removed.",
   "cli.scheduler_error": "Task Scheduler error: {error}",
+  "client.unexpected_listing": "BIMcloud answered the listing in an unexpected format",
   "config.at_least": "{name} must be at least {minimum}",
   "config.between": "{name} must be between {low} and {high}",
   "config.directory_empty": "backup.directory cannot be empty",
